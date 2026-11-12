@@ -119,7 +119,7 @@ function LabelDetail({ set, i, unitMm, maxSize }: { set: LabelSet; i: number; un
   );
 }
 
-function LetterGrid({ set, unitMm, maxSize }: { set: LabelSet; unitMm: number; maxSize: number }) {
+function LetterGrid({ set, unitMm, maxSize, count }: { set: LabelSet; unitMm: number; maxSize: number; count: number }) {
   const t = useT();
   const [detail, setDetail] = useState<number | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -135,7 +135,7 @@ function LetterGrid({ set, unitMm, maxSize }: { set: LabelSet; unitMm: number; m
     <>
       <p className="row-hint">{t('text.gridHint')}</p>
       <div className="letter-grid">
-        {set.texts.map((txt, i) => {
+        {set.texts.slice(0, count > 0 ? Math.min(set.texts.length, count) : set.texts.length).map((txt, i) => {
           const o = set.overrides[i];
           return (
             <div
@@ -222,7 +222,7 @@ function SetEditor({ set, anchorCount, unitMm, maxSize, onDelete }: { set: Label
           <span>{t('text.editLetters', { n: set.texts.length })}</span>
           <Icon name="chevronDown" size={18} className="band-chevron" />
         </button>
-        {letters && <LetterGrid set={set} unitMm={unitMm} maxSize={maxSize} />}
+        {letters && <LetterGrid set={set} unitMm={unitMm} maxSize={maxSize} count={anchorCount} />}
       </Block>
       <div className="band-actions">
         <button type="button" className="pill-btn is-destructive" onClick={onDelete}>

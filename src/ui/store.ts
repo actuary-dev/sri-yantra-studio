@@ -121,7 +121,10 @@ export function loadLibrary(storage: KVStorage | null): Design[] {
   const list = Array.isArray(data) ? data : data && typeof data === 'object' ? (data as { designs?: unknown }).designs : null;
   if (!Array.isArray(list)) return [];
   // unknown schemas are ignored (never crash on old/foreign data)
-  return list.filter(isDesign).sort((a, b) => b.updatedAt - a.updatedAt);
+  return list
+    .filter(isDesign)
+    .map((d) => (Array.isArray(d.centre) ? d : { ...d, centre: [{ id: 'sri', type: 'sri' as const, visible: true, radius: 1 }] }))
+    .sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 export function loadSettings(storage: KVStorage | null): Settings {

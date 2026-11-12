@@ -1,8 +1,8 @@
 /**
  * Starting designs. Geometry values are documented in docs/MATH.md.
  */
-import type { Band, BhupuraBand, CircleBand, Design, BeadBand, LotusBand, TextRingBand } from '../core/types';
-import { createLabelSet } from '../text';
+import type { Band, BhupuraBand, CircleBand, CircleFigure, Design, BeadBand, GridFigure, LotusBand, PolygonFigure, SriFigure, TextRingBand } from '../core/types';
+import { createLabelSet, toDevanagariNumber } from '../text';
 
 let counter = 0;
 export function newId(prefix = 'd'): string {
@@ -29,6 +29,31 @@ export const bhupuraBand = (id: string, p: Partial<BhupuraBand> = {}): BhupuraBa
   id, type: 'bhupura', visible: true, gap: 0.07, lineMm: 0.5, lines: 3, spacing: 0.04, gateWidth: 0.3, gateDepth: 0.13, gateFlare: 1.6,
   style: 'classic', fill: null, ...p,
 });
+
+/* ---------------------------------------------------------- centre makers */
+
+export const sriFigure = (id = 'sri', radius = 1): SriFigure => ({ id, type: 'sri', visible: true, radius });
+export const polygonFigure = (id: string, sides: number, p: Partial<PolygonFigure> = {}): PolygonFigure => ({
+  id, type: 'polygon', visible: true, sides, step: 1, radius: 1, rotationDeg: 0, nest: 1, nestRatio: 0.75, lineMm: 0.5, lines: 1, lineGapMm: 1.2,
+  fill: null, ...p,
+});
+export const circleFigure = (id: string, radius: number, p: Partial<CircleFigure> = {}): CircleFigure => ({
+  id, type: 'circle', visible: true, radius, count: 1, spacing: 0.03, lineMm: 0.5, ...p,
+});
+export const gridFigure = (id: string, rows: number, cols: number, numbers: (number | string)[], p: Partial<GridFigure> = {}): GridFigure => ({
+  id, type: 'grid', visible: true, rows, cols, size: 1.2, textSizeMm: 16, lineMm: 0.5,
+  texts: numbers.map((v) => (typeof v === 'number' ? toDevanagariNumber(v) : v)), ...p,
+});
+
+/** A simple enclosure for most yantras: circle, 8 petals, circle, bhupura. */
+export function simpleBands(lineMm = 0.5): Band[] {
+  return [
+    circleBand('c0', { lineMm }),
+    lotusBand('l8', 8, { lineMm, height: 0.26 }),
+    circleBand('c1', { lineMm }),
+    bhupuraBand('bhu', { lineMm }),
+  ];
+}
 
 /** The canonical enclosure: circle · 8 petals · circle · 16 petals · three circles · bhupura. */
 export function standardBands(lineMm = 0.5): Band[] {
@@ -79,6 +104,7 @@ export function createDesign(p: Partial<Design> = {}): Design {
     updatedAt: now,
     sizeMm: 300,
     geometry: { ...GEOMETRIES.classical },
+    centre: [sriFigure()],
     triangles: { visible: true, lineMm: 0.5, lines: 1, lineGapMm: 1.2 },
     cells: { filled: false, palette: [...CELL_PALETTE], insets: 0, insetGapMm: 1 },
     bindu: { visible: true, radius: 0.014, style: 'dot' },
@@ -90,8 +116,11 @@ export function createDesign(p: Partial<Design> = {}): Design {
   };
 }
 
+export type PresetCategory = 'forms' | 'numbers' | 'sri';
+
 export interface Preset {
   id: string;
+  category: PresetCategory;
   name: string;
   nameHi: string;
   blurb: string;
@@ -101,7 +130,151 @@ export interface Preset {
 
 export const PRESETS: Preset[] = [
   {
+    id: 'blank',
+    category: 'forms',
+    name: 'Empty Yantra',
+    nameHi: 'रिक्त यन्त्र',
+    blurb: 'Only the enclosure. Add your own figures, letters and numbers.',
+    blurbHi: 'केवल भूपुर और कमल। अपनी आकृतियाँ, अक्षर और अंक स्वयं जोड़ें।',
+    make: () => createDesign({ name: 'My Yantra', centre: [], bands: simpleBands() }),
+  },
+  {
+    id: 'trikona',
+    category: 'forms',
+    name: 'Triangle in Lotus',
+    nameHi: 'कमल में त्रिकोण',
+    blurb: 'One downward triangle in an eight-petalled lotus. Often drawn for Tara.',
+    blurbHi: 'अष्टदल कमल में एक अधोमुख त्रिकोण — प्रायः तारा यन्त्र का रूप।',
+    make: () => createDesign({ name: 'Triangle Yantra', centre: [polygonFigure('p1', 3, { rotationDeg: 180 })], bands: simpleBands() }),
+  },
+  {
+    id: 'shatkona',
+    category: 'forms',
+    name: 'Six-Pointed Star',
+    nameHi: 'षट्कोण',
+    blurb: 'Two interlocked triangles in a lotus. A base for many deity yantras.',
+    blurbHi: 'दो परस्पर गुँथे त्रिकोण। अनेक देव-यन्त्रों का आधार।',
+    make: () => createDesign({ name: 'Shatkona Yantra', centre: [polygonFigure('p1', 6, { step: 2 })], bands: simpleBands() }),
+  },
+  {
+    id: 'ganesha',
+    category: 'forms',
+    name: 'Triangle in Star',
+    nameHi: 'षट्कोण में त्रिकोण',
+    blurb: 'A triangle inside a six-pointed star with eight petals. Often drawn for Ganesha.',
+    blurbHi: 'षट्कोण के भीतर त्रिकोण, अष्टदल सहित — प्रायः गणेश यन्त्र का रूप।',
+    make: () =>
+      createDesign({
+        name: 'Ganesha Yantra',
+        centre: [polygonFigure('p1', 6, { step: 2 }), polygonFigure('p2', 3, { radius: 0.36 })],
+        bands: simpleBands(),
+      }),
+  },
+  {
+    id: 'kali',
+    category: 'forms',
+    name: 'Five Triangles',
+    nameHi: 'पञ्च त्रिकोण',
+    blurb: 'Five downward triangles one inside another. Often drawn for Kali.',
+    blurbHi: 'एक के भीतर एक पाँच अधोमुख त्रिकोण — प्रायः काली यन्त्र का रूप।',
+    make: () =>
+      createDesign({
+        name: 'Kali Yantra',
+        centre: [polygonFigure('p1', 3, { rotationDeg: 180, nest: 5, nestRatio: 0.74 })],
+        bands: [circleBand('c0', { count: 2, spacing: 0.04 }), lotusBand('l8', 8, { height: 0.26 }), circleBand('c1'), bhupuraBand('bhu')],
+      }),
+  },
+  {
+    id: 'bhuvaneshwari',
+    category: 'forms',
+    name: 'Star with Two Lotuses',
+    nameHi: 'षट्कोण, दो कमल',
+    blurb: 'Six-pointed star with eight and sixteen petals. Often drawn for Bhuvaneshvari.',
+    blurbHi: 'षट्कोण, अष्टदल और षोडशदल — प्रायः भुवनेश्वरी यन्त्र का रूप।',
+    make: () => createDesign({ name: 'Bhuvaneshwari Yantra', centre: [polygonFigure('p1', 6, { step: 2 })], bands: standardBands() }),
+  },
+  {
+    id: 'panchakona',
+    category: 'forms',
+    name: 'Five-Pointed Star',
+    nameHi: 'पञ्चकोण',
+    blurb: 'A five-pointed star with a pentagon at its heart, in a lotus.',
+    blurbHi: 'कमल में पञ्चकोण तारा।',
+    make: () => createDesign({ name: 'Panchakona Yantra', centre: [polygonFigure('p1', 5, { step: 2 })], bands: simpleBands() }),
+  },
+  {
+    id: 'ashtakona',
+    category: 'forms',
+    name: 'Eight-Pointed Star',
+    nameHi: 'अष्टकोण',
+    blurb: 'Two interlocked squares with sixteen petals.',
+    blurbHi: 'दो परस्पर गुँथे चतुरस्र, षोडशदल सहित।',
+    make: () =>
+      createDesign({
+        name: 'Ashtakona Yantra',
+        centre: [polygonFigure('p1', 8, { step: 2 }), circleFigure('ci', 0.38)],
+        bands: [circleBand('c0'), lotusBand('l16', 16, { height: 0.22 }), circleBand('c1'), bhupuraBand('bhu')],
+      }),
+  },
+  {
+    id: 'navakona',
+    category: 'forms',
+    name: 'Nine-Pointed Star',
+    nameHi: 'नवकोण',
+    blurb: 'Three interlocked triangles forming nine points, in a lotus.',
+    blurbHi: 'तीन परस्पर गुँथे त्रिकोण — नौ कोण।',
+    make: () => createDesign({ name: 'Navakona Yantra', centre: [polygonFigure('p1', 9, { step: 3 })], bands: simpleBands() }),
+  },
+  {
+    id: 'surya',
+    category: 'numbers',
+    name: 'Number Square of 15',
+    nameHi: 'पन्द्रह का यन्त्र',
+    blurb: 'Three by three, every line adds to 15: the Surya yantra. Change the numbers for other planets.',
+    blurbHi: 'तीन-तीन कोष्ठ, प्रत्येक पंक्ति का योग १५ — सूर्य यन्त्र। अन्य ग्रहों के लिए अंक बदलें।',
+    make: () =>
+      createDesign({
+        name: 'Surya Yantra',
+        centre: [gridFigure('g1', 3, 3, [6, 1, 8, 7, 5, 3, 2, 9, 4])],
+        bindu: { visible: false, radius: 0.014, style: 'dot' },
+        bands: simpleBands(),
+      }),
+  },
+  {
+    id: 'kubera',
+    category: 'numbers',
+    name: 'Number Square of 72',
+    nameHi: 'बहत्तर का यन्त्र',
+    blurb: 'Every line adds to 72, widely used as the Kubera yantra. A plain square border.',
+    blurbHi: 'प्रत्येक पंक्ति का योग ७२ — कुबेर यन्त्र के रूप में प्रसिद्ध।',
+    make: () =>
+      createDesign({
+        name: 'Kubera Yantra',
+        sizeMm: 150,
+        centre: [gridFigure('g1', 3, 3, [27, 20, 25, 22, 24, 26, 23, 28, 21]), polygonFigure('p1', 4, { rotationDeg: 45, radius: 1, lines: 2, lineGapMm: 2 })],
+        bindu: { visible: false, radius: 0.014, style: 'dot' },
+        bands: [],
+        style: { ...PAPERS.copper },
+      }),
+  },
+  {
+    id: 'chautisa',
+    category: 'numbers',
+    name: 'Number Square of 34',
+    nameHi: 'चौंतीसा यन्त्र',
+    blurb: 'Four by four, every line adds to 34 (Chautisa yantra).',
+    blurbHi: 'चार-चार कोष्ठ, प्रत्येक पंक्ति का योग ३४।',
+    make: () =>
+      createDesign({
+        name: 'Chautisa Yantra',
+        centre: [gridFigure('g1', 4, 4, [7, 12, 1, 14, 2, 13, 8, 11, 16, 3, 10, 5, 9, 6, 15, 4], { textSizeMm: 12 })],
+        bindu: { visible: false, radius: 0.014, style: 'dot' },
+        bands: simpleBands(),
+      }),
+  },
+  {
     id: 'classical',
+    category: 'sri',
     name: 'Classical',
     nameHi: 'शास्त्रीय',
     blurb: 'The well-known form, as analysed by Gérard Huet. A safe place to begin.',
@@ -110,6 +283,7 @@ export const PRESETS: Preset[] = [
   },
   {
     id: 'optimal',
+    category: 'sri',
     name: 'Perfectly Centred',
     nameHi: 'पूर्ण केन्द्रित',
     blurb: 'Bindu at the exact centre and an equilateral central triangle.',
@@ -118,6 +292,7 @@ export const PRESETS: Preset[] = [
   },
   {
     id: 'lakshmidhara',
+    category: 'sri',
     name: 'Saundaryalaharī (48 parts)',
     nameHi: 'सौन्दर्यलहरी (४८ भाग)',
     blurb: 'Lakshmīdhara’s traditional 48-part rule, with every crossing made exact.',
@@ -126,6 +301,7 @@ export const PRESETS: Preset[] = [
   },
   {
     id: 'navagraha',
+    category: 'sri',
     name: 'Simple Ratios',
     nameHi: 'सरल अनुपात',
     blurb: 'Built from easy fractions — 8/9, 2/3, 2/5, 1/6 — that a craftsman can lay out by hand.',
@@ -134,6 +310,7 @@ export const PRESETS: Preset[] = [
   },
   {
     id: 'temple',
+    category: 'sri',
     name: 'Old Temple Style',
     nameHi: 'प्राचीन मन्दिर शैली',
     blurb: 'Centred figure with rounded petals and plain gateways, after old South Indian yantras.',
@@ -155,6 +332,7 @@ export const PRESETS: Preset[] = [
   },
   {
     id: 'urdhva',
+    category: 'sri',
     name: 'Upward (Ūrdhvamukha)',
     nameHi: 'ऊर्ध्वमुख',
     blurb: 'The same yantra with the central triangle pointing upward.',
@@ -163,6 +341,7 @@ export const PRESETS: Preset[] = [
   },
   {
     id: 'silver',
+    category: 'sri',
     name: 'Silver Plate',
     nameHi: 'रजत पत्र',
     blurb: 'Fine double lines for engraving a small silver plate. Lines only, no colour.',
@@ -187,6 +366,7 @@ export const PRESETS: Preset[] = [
   },
   {
     id: 'marble',
+    category: 'sri',
     name: 'Marble Carving',
     nameHi: 'संगमरमर',
     blurb: 'Bold, clean lines sized for a large marble slab.',
@@ -204,6 +384,7 @@ export const PRESETS: Preset[] = [
   },
   {
     id: 'colour',
+    category: 'sri',
     name: 'Coloured Chart',
     nameHi: 'रंगीन चित्र',
     blurb: 'Each enclosure in its own colour, for printing on large chart paper.',
@@ -227,6 +408,7 @@ export const PRESETS: Preset[] = [
   },
   {
     id: 'matrika',
+    category: 'sri',
     name: 'With Sanskrit Letters',
     nameHi: 'मातृका अक्षर सहित',
     blurb: 'The letters of the alphabet placed in the petals and triangles, with a mantra ring.',
@@ -264,6 +446,7 @@ export const PRESETS: Preset[] = [
   },
   {
     id: 'grand',
+    category: 'sri',
     name: 'Grand Lotus',
     nameHi: 'महापद्म',
     blurb: 'Many rings of petals and beads — the most detailed design, for a very large sheet.',
@@ -296,6 +479,7 @@ export const PRESETS: Preset[] = [
   },
   {
     id: 'study',
+    category: 'sri',
     name: 'Study Chart',
     nameHi: 'अध्ययन चित्र',
     blurb: 'All 43 triangles and the 18 marma points numbered in Sanskrit numerals.',

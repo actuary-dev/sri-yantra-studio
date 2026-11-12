@@ -302,6 +302,17 @@ export function ShapePanel({ design, scene }: PanelProps) {
         )}
       </Group>
 
+      <BinduGuides design={design} scene={scene} />
+    </>
+  );
+}
+
+/** Bindu and guide switches — shared by every kind of yantra. */
+export function BinduGuides({ design, scene }: PanelProps) {
+  const t = useT();
+  const hasSri = scene.report.hasSri;
+  return (
+    <>
       <Group title={t('shape.bindu')}>
         <Row label={t('shape.showBindu')}>
           <Switch label={t('shape.showBindu')} checked={design.bindu.visible} onChange={(v) => update((d) => { d.bindu.visible = v; })} />
@@ -336,12 +347,14 @@ export function ShapePanel({ design, scene }: PanelProps) {
       </Group>
 
       <Group title={t('shape.guides')} footer={t('shape.guidesHint')}>
-        <Row label={t('shape.marma')} icon={<span className="dot" style={{ background: '#c0392b' }} />}>
+        <Row label={hasSri ? t('shape.marma') : t('guides.crossings')} icon={<span className="dot" style={{ background: '#c0392b' }} />}>
           <Switch label={t('shape.marma')} checked={design.guides.marma} onChange={(v) => update((d) => { d.guides.marma = v; })} />
         </Row>
-        <Row label={t('shape.sandhi')} icon={<span className="dot" style={{ background: '#1f6fb2' }} />}>
-          <Switch label={t('shape.sandhi')} checked={design.guides.sandhi} onChange={(v) => update((d) => { d.guides.sandhi = v; })} />
-        </Row>
+        {hasSri && (
+          <Row label={t('shape.sandhi')} icon={<span className="dot" style={{ background: '#1f6fb2' }} />}>
+            <Switch label={t('shape.sandhi')} checked={design.guides.sandhi} onChange={(v) => update((d) => { d.guides.sandhi = v; })} />
+          </Row>
+        )}
         <Row label={t('shape.axes')} icon={<span className="dot" style={{ background: '#8a8a8a' }} />}>
           <Switch label={t('shape.axes')} checked={design.guides.axes} onChange={(v) => update((d) => { d.guides.axes = v; })} />
         </Row>

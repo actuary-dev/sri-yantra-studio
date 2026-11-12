@@ -79,7 +79,7 @@ export function Gallery() {
         <div className="large-title">
           <h1>{t('app.title')}</h1>
           <p className="large-subtitle deva" lang="sa">
-            श्री यन्त्र
+            यन्त्र
           </p>
         </div>
 
@@ -97,20 +97,25 @@ export function Gallery() {
         {tab === 'designs' ? (
           <>
             <p className="gallery-intro">{t('gallery.intro')}</p>
-            <div className="card-grid">
-              {PRESETS.map((p) => {
-                const name = lang === 'hi' ? p.nameHi : p.name;
-                return (
-                  <button key={p.id} type="button" className="card" onClick={() => openPreset(p, t('error.preset'))}>
-                    <Thumb thumbKey={`preset:${p.id}`} make={p.make} alt={name} />
-                    <span className="card-text">
-                      <span className="card-title">{name}</span>
-                      <span className="card-sub">{lang === 'hi' ? p.blurbHi : p.blurb}</span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+            {(['forms', 'numbers', 'sri'] as const).map((cat) => (
+              <section key={cat} aria-label={t(`gallery.cat.${cat}`)}>
+                <h2 className="group-title" style={{ margin: '22px 4px 10px', fontSize: 15 }}>{t(`gallery.cat.${cat}`)}</h2>
+                <div className="card-grid">
+                  {PRESETS.filter((p) => p.category === cat).map((p) => {
+                    const name = lang === 'hi' ? p.nameHi : p.name;
+                    return (
+                      <button key={p.id} type="button" className="card" onClick={() => openPreset(p, t('error.preset'))}>
+                        <Thumb thumbKey={`preset:${p.id}`} make={p.make} alt={name} />
+                        <span className="card-text">
+                          <span className="card-title">{name}</span>
+                          <span className="card-sub">{lang === 'hi' ? p.blurbHi : p.blurb}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
           </>
         ) : library.length === 0 ? (
           <div className="empty">

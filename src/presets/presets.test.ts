@@ -14,15 +14,20 @@ describe('every starting design', () => {
       const design = p.make();
       const scene = buildScene(design, shaper);
       expect(scene.report.ok, p.id).toBe(true);
-      expect(scene.report.ringCounts, p.id).toEqual([14, 10, 10, 8, 1]);
-      expect(scene.report.marmaCount, p.id).toBe(18);
-      expect(scene.report.concurrencyError * scene.unitMm, p.id).toBeLessThan(1e-6); // mm
+      expect(scene.report.hasSri, p.id).toBe(p.category === 'sri');
+      if (scene.report.hasSri) {
+        expect(scene.report.ringCounts, p.id).toEqual([14, 10, 10, 8, 1]);
+        expect(scene.report.marmaCount, p.id).toBe(18);
+        expect(scene.report.concurrencyError * scene.unitMm, p.id).toBeLessThan(1e-6); // mm
+      }
+      expect(scene.prims.length, p.id).toBeGreaterThan(3);
+      for (const a of scene.anchors) expect(Number.isFinite(a.x + a.y + a.r), `${p.id} ${a.id}`).toBe(true);
       expect(Number.isFinite(scene.extent)).toBe(true);
       // every text primitive got real outlines
       for (const prim of scene.prims) if (prim.kind === 'text') expect(prim.outline && prim.outline.length > 0, `${p.id} ${prim.id}`).toBe(true);
       // text can be switched off in one move
       const off = buildScene({ ...design, text: { ...design.text, visible: false } }, shaper);
-      expect(off.prims.filter((q) => q.layer === 'text').length, p.id).toBe(0);
+      expect(off.prims.filter((q) => q.kind === 'text' && q.layer === 'text').length, p.id).toBe(0);
 
       const svg = sceneToSvg(scene, DEFAULT_EXPORT);
       expect(svg.includes('NaN'), p.id).toBe(false);

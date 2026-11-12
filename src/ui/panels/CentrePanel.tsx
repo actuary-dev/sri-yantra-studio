@@ -1,0 +1,519 @@
+/** CENTRE: the figures at the heart of the yantra — triangles, stars, circles, number squares, the Sri Yantra. */
+import { useState } from 'react';
+import { centreOf } from '../../core';
+import type { CentreFigure, CircleFigure, GridFigure, PolygonFigure, SriFigure } from '../../core/types';
+import { circleFigure, gridFigure, newId, polygonFigure, sriFigure } from '../../presets';
+import { toDevanagariNumber } from '../../text';
+import { updateDesign as update } from '../store';
+import { useT, type TFn, type TKey } from '../i18n';
+import type { PanelProps } from '../Editor';
+import { Group, Row, Block, Chips, ButtonRow } from '../components/List';
+import { Segmented } from '../components/Segmented';
+import { SliderRow } from '../components/SliderRow';
+import { Stepper } from '../components/Stepper';
+import { Switch } from '../components/Switch';
+import { ColorWell } from '../components/ColorWell';
+import { Icon } from '../components/Icon';
+import { ActionSheet } from '../components/ActionSheet';
+import { BinduGuides, ShapePanel } from './ShapePanel';
+
+const GLYPH: Record<CentreFigure['type'], string> = { sri: '✡', polygon: '△', circle: '○', grid: '▦' };
+
+function updFig<T extends CentreFigure>(id: string, fn: (f: T) => void, coalesceKey?: string) {
+  update(
+    (d) => {
+      d.centre = centreOf(d);
+      const f = d.centre.find((x) => x.id === id);
+      if (f) fn(f as T);
+    },
+    coalesceKey ? { coalesceKey: `fig:${id}:${coalesceKey}` } : undefined,
+  );
+}
+
+const norm = (deg: number) => ((((deg + 180) % 360) + 360) % 360) - 180;
+
+function polygonName(f: PolygonFigure, t: TFn): string {
+  const rot = Math.abs(norm(f.rotationDeg));
+  let base: string;
+  if (f.sides === 3 && f.step === 1) base = rot < 1 ? t('fig.triangleUp') : Math.abs(rot - 180) < 1 ? t('fig.triangleDown') : t('fig.triangle');
+  else if (f.sides === 4 && f.step === 1) base = t('fig.square');
+  else if (f.sides === 6 && f.step === 2) base = t('fig.star6');
+  else if (f.sides === 5 && f.step === 2) base = t('fig.star5');
+  else if (f.sides === 8 && (f.step === 2 || f.step === 3)) base = t('fig.star8');
+  else base = f.step > 1 ? t('fig.starN', { n: f.sides }) : t('fig.polygonN', { n: f.sides });
+  return f.nest > 1 ? t('fig.nested', { name: base, n: f.nest }) : base;
+}
+
+function figureName(f: CentreFigure, t: TFn): string {
+  switch (f.type) {
+    case 'sri':
+      return t('fig.sri');
+    case 'polygon':
+      return polygonName(f, t);
+    case 'circle':
+      return f.count > 1 ? t('fig.circleN', { n: f.count }) : t('fig.circle');
+    case 'grid':
+      return t('fig.grid', { r: f.rows, c: f.cols });
+  }
+}
+
+const mmOf = (v: number, unitMm: number) => `${(v * unitMm).toFixed(1)} mm`;
+
+function LineWeight({ id, value }: { id: string; value: number }) {
+  const t = useT();
+  return (
+    <Block>
+      <SliderRow
+        label={t('common.lineWeight')}
+        value={value}
+        min={0.05}
+        max={5}
+        step={0.01}
+        log
+        display={`${value.toFixed(2)} mm`}
+        onChange={(v) => updFig<PolygonFigure | CircleFigure | GridFigure>(id, (x) => { x.lineMm = v; }, 'line')}
+      />
+    </Block>
+  );
+}
+
+type Quick = 'up' | 'down' | 'square' | 'star6' | 'star5' | 'star8' | 'other';
+const QUICK: Record<Exclude<Quick, 'other'>, Pick<PolygonFigure, 'sides' | 'step' | 'rotationDeg'>> = {
+  up: { sides: 3, step: 1, rotationDeg: 0 },
+  down: { sides: 3, step: 1, rotationDeg: 180 },
+  square: { sides: 4, step: 1, rotationDeg: 45 },
+  star6: { sides: 6, step: 2, rotationDeg: 0 },
+  star5: { sides: 5, step: 2, rotationDeg: 0 },
+  star8: { sides: 8, step: 2, rotationDeg: 0 },
+};
+
+function quickOf(f: PolygonFigure): Quick {
+  for (const k of Object.keys(QUICK) as Exclude<Quick, 'other'>[]) {
+    const q = QUICK[k];
+    if (q.sides === f.sides && q.step === f.step && Math.abs(norm(f.rotationDeg - q.rotationDeg)) < 0.01) return k;
+  }
+  return 'other';
+}
+
+function PolygonControls({ f, unitMm }: { f: PolygonFigure; unitMm: number }) {
+  const t = useT();
+  const maxStep = Math.max(1, Math.floor((f.sides - 1) / 2) || 1);
+  const pointsDown = Math.abs(Math.abs(norm(f.rotationDeg)) - 180) < 0.01;
+  const pointsUp = Math.abs(norm(f.rotationDeg)) < 0.01;
+  return (
+    <>
+      <Block>
+        <Chips<Quick>
+          label={t('poly.quick')}
+          value={quickOf(f)}
+          onChange={(k) => {
+            if (k === 'other') return;
+            updFig<PolygonFigure>(f.id, (x) => Object.assign(x, QUICK[k]));
+          }}
+          options={[
+            { value: 'up', label: '▲', aria: t('fig.triangleUp') },
+            { value: 'down', label: '▼', aria: t('fig.triangleDown') },
+            { value: 'star6', label: '✡', aria: t('fig.star6') },
+            { value: 'star5', label: '★', aria: t('fig.star5') },
+            { value: 'square', label: '■', aria: t('fig.square') },
+            { value: 'star8', label: '✴', aria: t('fig.star8') },
+          ]}
+        />
+      </Block>
+      <Row label={t('poly.corners')}>
+        <Stepper
+          label={t('poly.corners')}
+          value={f.sides}
+          min={3}
+          max={36}
+          onChange={(v) => updFig<PolygonFigure>(f.id, (x) => { x.sides = v; x.step = Math.min(x.step, Math.max(1, Math.floor((v - 1) / 2))); })}
+        />
+      </Row>
+      {maxStep > 1 && (
+        <Row label={t('poly.step')} sub={t('poly.stepHint')}>
+          <Stepper label={t('poly.step')} value={Math.min(f.step, maxStep)} min={1} max={maxStep} onChange={(v) => updFig<PolygonFigure>(f.id, (x) => { x.step = v; })} />
+        </Row>
+      )}
+      <Block>
+        <SliderRow
+          label={t('poly.size')}
+          value={f.radius}
+          min={0.03}
+          max={2.5}
+          step={0.005}
+          display={mmOf(f.radius * 2, unitMm)}
+          onChange={(v) => updFig<PolygonFigure>(f.id, (x) => { x.radius = v; }, 'radius')}
+        />
+      </Block>
+      <Block>
+        <Segmented<'up' | 'down' | 'other'>
+          label={t('poly.direction')}
+          value={pointsUp ? 'up' : pointsDown ? 'down' : 'other'}
+          onChange={(v) => { if (v !== 'other') updFig<PolygonFigure>(f.id, (x) => { x.rotationDeg = v === 'up' ? 0 : 180; }); }}
+          options={[
+            { value: 'up', label: `▲ ${t('poly.up')}` },
+            { value: 'down', label: `▼ ${t('poly.down')}` },
+          ]}
+        />
+      </Block>
+      <Block>
+        <SliderRow
+          label={t('poly.turn')}
+          value={norm(f.rotationDeg)}
+          min={-180}
+          max={180}
+          step={0.5}
+          display={`${norm(f.rotationDeg).toFixed(1)}°`}
+          onChange={(v) => updFig<PolygonFigure>(f.id, (x) => { x.rotationDeg = v; }, 'turn')}
+        />
+      </Block>
+      <Row label={t('poly.copies')} sub={t('poly.copiesSub')}>
+        <Stepper label={t('poly.copies')} value={f.nest} min={1} max={12} onChange={(v) => updFig<PolygonFigure>(f.id, (x) => { x.nest = v; })} />
+      </Row>
+      {f.nest > 1 && (
+        <Block>
+          <SliderRow
+            label={t('poly.copyRatio')}
+            value={f.nestRatio}
+            min={0.3}
+            max={0.97}
+            step={0.005}
+            display={`${Math.round(f.nestRatio * 100)} %`}
+            onChange={(v) => updFig<PolygonFigure>(f.id, (x) => { x.nestRatio = v; }, 'ratio')}
+          />
+        </Block>
+      )}
+      <LineWeight id={f.id} value={f.lineMm} />
+      <Row label={t('shape.parallel')}>
+        <Stepper label={t('shape.parallel')} value={f.lines} min={1} max={3} onChange={(v) => updFig<PolygonFigure>(f.id, (x) => { x.lines = v; })} />
+      </Row>
+      {f.lines > 1 && (
+        <Block>
+          <SliderRow
+            label={t('shape.parallelGap')}
+            value={f.lineGapMm}
+            min={0.2}
+            max={10}
+            step={0.05}
+            log
+            display={`${f.lineGapMm.toFixed(2)} mm`}
+            onChange={(v) => updFig<PolygonFigure>(f.id, (x) => { x.lineGapMm = v; }, 'gap')}
+          />
+        </Block>
+      )}
+      <Row label={t('poly.fill')} sub={f.fill ? undefined : t('rings.noFill')}>
+        <div className="inline-controls">
+          {f.fill && <ColorWell value={f.fill} onChange={(v) => updFig<PolygonFigure>(f.id, (x) => { x.fill = v; }, 'fill')} label={t('poly.fill')} />}
+          <Switch label={t('poly.fill')} checked={!!f.fill} onChange={(on) => updFig<PolygonFigure>(f.id, (x) => { x.fill = on ? '#e8c15a' : null; })} />
+        </div>
+      </Row>
+    </>
+  );
+}
+
+function CircleControls({ f, unitMm }: { f: CircleFigure; unitMm: number }) {
+  const t = useT();
+  return (
+    <>
+      <Block>
+        <SliderRow
+          label={t('poly.size')}
+          value={f.radius}
+          min={0.02}
+          max={2.5}
+          step={0.005}
+          display={mmOf(f.radius * 2, unitMm)}
+          onChange={(v) => updFig<CircleFigure>(f.id, (x) => { x.radius = v; }, 'radius')}
+        />
+      </Block>
+      <Row label={t('rings.circles')}>
+        <Stepper label={t('rings.circles')} value={f.count} min={1} max={6} onChange={(v) => updFig<CircleFigure>(f.id, (x) => { x.count = v; })} />
+      </Row>
+      {f.count > 1 && (
+        <Block>
+          <SliderRow
+            label={t('rings.spacing')}
+            value={f.spacing}
+            min={0.005}
+            max={0.2}
+            step={0.001}
+            display={mmOf(f.spacing, unitMm)}
+            onChange={(v) => updFig<CircleFigure>(f.id, (x) => { x.spacing = v; }, 'spacing')}
+          />
+        </Block>
+      )}
+      <LineWeight id={f.id} value={f.lineMm} />
+    </>
+  );
+}
+
+const DEVA = '०१२३४५६७८९';
+const toLatinDigits = (s: string) => s.replace(/[०-९]/g, (d) => String(DEVA.indexOf(d)));
+const toDevaDigits = (s: string) => s.replace(/[0-9]/g, (d) => DEVA[Number(d)]);
+
+/** The common sum of all rows, columns and diagonals, or null when they differ or a cell is not a number. */
+export function magicSum(texts: string[], rows: number, cols: number): number | null {
+  const v: number[] = [];
+  for (let i = 0; i < rows * cols; i++) {
+    const raw = toLatinDigits((texts[i] ?? '').trim());
+    if (!/^-?\d+(\.\d+)?$/.test(raw)) return null;
+    v.push(Number(raw));
+  }
+  const sums: number[] = [];
+  for (let r = 0; r < rows; r++) sums.push(v.slice(r * cols, r * cols + cols).reduce((a, b) => a + b, 0));
+  for (let c = 0; c < cols; c++) { let s = 0; for (let r = 0; r < rows; r++) s += v[r * cols + c]; sums.push(s); }
+  if (rows === cols) {
+    let d1 = 0, d2 = 0;
+    for (let i = 0; i < rows; i++) { d1 += v[i * cols + i]; d2 += v[i * cols + (cols - 1 - i)]; }
+    sums.push(d1, d2);
+  }
+  return sums.every((s) => Math.abs(s - sums[0]) < 1e-9) ? sums[0] : null;
+}
+
+function GridControls({ f, unitMm }: { f: GridFigure; unitMm: number }) {
+  const t = useT();
+  const resize = (rows: number, cols: number) =>
+    updFig<GridFigure>(f.id, (x) => {
+      const next: string[] = [];
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) next.push(r < x.rows && c < x.cols ? x.texts[r * x.cols + c] ?? '' : '');
+      x.rows = rows;
+      x.cols = cols;
+      x.texts = next;
+    });
+  const sum = magicSum(f.texts, f.rows, f.cols);
+  const allFilled = f.texts.slice(0, f.rows * f.cols).every((s) => (s ?? '').trim() !== '');
+  const usesDeva = f.texts.some((s) => /[०-९]/.test(s ?? ''));
+  return (
+    <>
+      <Row label={t('grid.rows')}>
+        <Stepper label={t('grid.rows')} value={f.rows} min={1} max={9} onChange={(v) => resize(v, f.cols)} />
+      </Row>
+      <Row label={t('grid.cols')}>
+        <Stepper label={t('grid.cols')} value={f.cols} min={1} max={9} onChange={(v) => resize(f.rows, v)} />
+      </Row>
+      <Block>
+        <div className="row-label">{t('grid.cells')}</div>
+        <div className="letter-grid" style={{ gridTemplateColumns: `repeat(${f.cols}, minmax(0, 1fr))` }}>
+          {Array.from({ length: f.rows * f.cols }, (_, i) => (
+            <div key={i} className="letter-cell">
+              <input
+                className="text-input deva"
+                lang="sa"
+                inputMode="text"
+                aria-label={`${Math.floor(i / f.cols) + 1}, ${(i % f.cols) + 1}`}
+                value={f.texts[i] ?? ''}
+                onChange={(e) => updFig<GridFigure>(f.id, (x) => { x.texts[i] = e.target.value; }, `cell:${i}`)}
+              />
+            </div>
+          ))}
+        </div>
+        {allFilled && sum !== null && (
+          <p className="row-hint">✓ {t('grid.sumsOk', { n: usesDeva ? toDevanagariNumber(sum) : sum })}</p>
+        )}
+        {allFilled && sum === null && f.texts.slice(0, f.rows * f.cols).every((s) => /^[\d०-९.\-\s]+$/.test(s ?? '')) && (
+          <p className="row-hint">{t('grid.sumsDiffer')}</p>
+        )}
+        <button type="button" className="text-btn small" onClick={() => updFig<GridFigure>(f.id, (x) => { x.texts = x.texts.map(usesDeva ? toLatinDigits : toDevaDigits); })}>
+          {usesDeva ? t('grid.toLatin') : t('grid.toDeva')}
+        </button>
+      </Block>
+      <Block>
+        <SliderRow
+          label={t('grid.size')}
+          value={f.size}
+          min={0.1}
+          max={3}
+          step={0.005}
+          display={mmOf(f.size, unitMm)}
+          onChange={(v) => updFig<GridFigure>(f.id, (x) => { x.size = v; }, 'size')}
+        />
+      </Block>
+      <Block>
+        <SliderRow
+          label={t('grid.textSize')}
+          value={f.textSizeMm}
+          min={1}
+          max={80}
+          step={0.5}
+          log
+          display={`${f.textSizeMm.toFixed(1)} mm`}
+          onChange={(v) => updFig<GridFigure>(f.id, (x) => { x.textSizeMm = v; }, 'text')}
+        />
+      </Block>
+      <LineWeight id={f.id} value={f.lineMm} />
+    </>
+  );
+}
+
+function SriControls({ f, unitMm }: { f: SriFigure; unitMm: number }) {
+  const t = useT();
+  return (
+    <Block>
+      <SliderRow
+        label={t('poly.size')}
+        value={f.radius}
+        min={0.1}
+        max={2}
+        step={0.005}
+        display={mmOf(f.radius * 2, unitMm)}
+        onChange={(v) => updFig<SriFigure>(f.id, (x) => { x.radius = v; }, 'radius')}
+      />
+    </Block>
+  );
+}
+
+type AddKind = 'triangle' | 'star6' | 'square' | 'polygon' | 'circle' | 'grid' | 'sri';
+
+export function CentrePanel({ design, scene }: PanelProps) {
+  const t = useT();
+  const figures = centreOf(design);
+  const [open, setOpen] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [deleting, setDeleting] = useState<CentreFigure | null>(null);
+  const hasSri = figures.some((f) => f.type === 'sri');
+  const lineMm = design.triangles.lineMm;
+
+  const move = (i: number, dir: -1 | 1) =>
+    update((d) => {
+      d.centre = centreOf(d);
+      const j = i + dir;
+      if (j < 0 || j >= d.centre.length) return;
+      [d.centre[i], d.centre[j]] = [d.centre[j], d.centre[i]];
+    });
+
+  const duplicate = (i: number) => {
+    const id = newId('f');
+    update((d) => {
+      d.centre = centreOf(d);
+      d.centre.splice(i + 1, 0, { ...structuredClone(d.centre[i]), id });
+    });
+    setOpen(id);
+  };
+
+  const add = (kind: AddKind) => {
+    const id = newId('f');
+    // a new figure starts a little smaller than the smallest one already there, so it is easy to see
+    const radii = figures.filter((f): f is PolygonFigure | CircleFigure | SriFigure => f.type !== 'grid').map((f) => f.radius);
+    const r = radii.length ? Math.max(0.12, Math.min(...radii) * 0.6) : 1;
+    const fig: CentreFigure =
+      kind === 'triangle'
+        ? polygonFigure(id, 3, { radius: r, rotationDeg: 180, lineMm })
+        : kind === 'star6'
+          ? polygonFigure(id, 6, { step: 2, radius: r, lineMm })
+          : kind === 'square'
+            ? polygonFigure(id, 4, { rotationDeg: 45, radius: r, lineMm })
+            : kind === 'polygon'
+              ? polygonFigure(id, 8, { step: 3, radius: r, lineMm })
+              : kind === 'circle'
+                ? circleFigure(id, r, { lineMm })
+                : kind === 'grid'
+                  ? gridFigure(id, 3, 3, [6, 1, 8, 7, 5, 3, 2, 9, 4], { size: Math.min(1.2, r * 1.3), textSizeMm: Math.max(3, design.sizeMm / 22), lineMm })
+                  : sriFigure(id, 1);
+    update((d) => {
+      d.centre = centreOf(d);
+      d.centre.push(fig);
+    });
+    setOpen(id);
+  };
+
+  const kinds: AddKind[] = ['triangle', 'star6', 'square', 'polygon', 'circle', 'grid', ...(hasSri ? [] : (['sri'] as AddKind[]))];
+  const addGlyph: Record<AddKind, string> = { triangle: '▼', star6: '✡', square: '■', polygon: '✴', circle: '○', grid: '▦', sri: '✡' };
+
+  return (
+    <>
+      <p className="panel-intro">{t('centre.intro')}</p>
+      <Group>
+        {figures.length === 0 && <div className="row muted">{t('centre.none')}</div>}
+        {figures.map((f, i) => {
+          const isOpen = open === f.id;
+          const name = figureName(f, t);
+          return (
+            <div key={f.id} className={`band${isOpen ? ' is-open' : ''}${f.visible ? '' : ' is-hidden'}`}>
+              <div className="row band-row">
+                <span className="row-icon band-glyph" aria-hidden="true" style={{ fontSize: 22, lineHeight: 1 }}>
+                  {GLYPH[f.type]}
+                </span>
+                <button type="button" className="band-toggle" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : f.id)}>
+                  <span className="row-text">
+                    <span className="row-label">
+                      <span className="band-index">{i + 1}</span> {name}
+                    </span>
+                  </span>
+                  <Icon name="chevronDown" size={18} className="band-chevron" />
+                </button>
+                <Switch label={t('centre.visibleAria', { name })} checked={f.visible} onChange={(v) => updFig(f.id, (x) => { x.visible = v; })} />
+              </div>
+              {isOpen && (
+                <div className="band-body">
+                  <div className="band-actions">
+                    <button type="button" className="pill-btn" onClick={() => move(i, -1)} disabled={i === 0}>
+                      <Icon name="up" size={18} /> {t('centre.moveBack')}
+                    </button>
+                    <button type="button" className="pill-btn" onClick={() => move(i, 1)} disabled={i === figures.length - 1}>
+                      <Icon name="down" size={18} /> {t('centre.moveFront')}
+                    </button>
+                    {f.type !== 'sri' && (
+                      <button type="button" className="pill-btn" onClick={() => duplicate(i)}>
+                        <Icon name="duplicate" size={18} /> {t('common.duplicate')}
+                      </button>
+                    )}
+                    <button type="button" className="pill-btn is-destructive" onClick={() => setDeleting(f)}>
+                      <Icon name="trash" size={18} /> {t('common.delete')}
+                    </button>
+                  </div>
+                  {f.type === 'polygon' && <PolygonControls f={f} unitMm={scene.unitMm} />}
+                  {f.type === 'circle' && <CircleControls f={f} unitMm={scene.unitMm} />}
+                  {f.type === 'grid' && <GridControls f={f} unitMm={scene.unitMm} />}
+                  {f.type === 'sri' && <SriControls f={f} unitMm={scene.unitMm} />}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </Group>
+
+      <Group>
+        <ButtonRow accent icon={<Icon name="plus" />} label={t('centre.add')} onClick={() => setAdding(true)} />
+      </Group>
+
+      {hasSri ? (
+        <>
+          <h3 className="group-title" style={{ marginTop: 18 }}>{t('centre.sriSettings')}</h3>
+          <ShapePanel design={design} scene={scene} />
+        </>
+      ) : (
+        <BinduGuides design={design} scene={scene} />
+      )}
+
+      <ActionSheet
+        open={adding}
+        onClose={() => setAdding(false)}
+        title={t('centre.addTitle')}
+        cancelLabel={t('common.cancel')}
+        actions={kinds.map((k) => ({
+          label: t(`figType.${k}` as TKey),
+          sub: t(`figType.${k}Sub` as TKey),
+          icon: <span aria-hidden="true" style={{ fontSize: 22, lineHeight: 1 }}>{addGlyph[k]}</span>,
+          onSelect: () => add(k),
+        }))}
+      />
+      <ActionSheet
+        open={!!deleting}
+        onClose={() => setDeleting(null)}
+        title={deleting ? t('rings.deleteTitle', { name: figureName(deleting, t) }) : ''}
+        cancelLabel={t('common.cancel')}
+        actions={
+          deleting
+            ? [
+                {
+                  label: t('common.delete'),
+                  destructive: true,
+                  onSelect: () => update((d) => { d.centre = centreOf(d).filter((x) => x.id !== deleting.id); }),
+                },
+              ]
+            : []
+        }
+      />
+    </>
+  );
+}

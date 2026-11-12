@@ -1,7 +1,16 @@
-# Sri Yantra Studio
+# Yantra Studio
 
-Design mathematically exact Sri Yantras on a phone or tablet and export them for
-marble or metal engraving (DXF, SVG) and large-format printing (PDF, PNG).
+Design yantras of any kind on a phone or tablet and export them for marble or metal
+engraving (DXF, SVG) and large-format printing (PDF, PNG).
+
+* **Centre:** any stack of figures — triangles, six-, five-, eight- and nine-pointed stars,
+  any polygon or star, figures nested inside each other, circles, number squares, and the
+  Sri Yantra's nine triangles solved exactly.
+* **Rings:** circles, lotus rings, bead rings, mantra rings, the bhupura with its gates.
+* **Text:** Sanskrit letters and numbers at every crossing, in every enclosed space, on
+  every petal, or anywhere you tap — each with its own size and angle. One button hides it all.
+
+Live: https://radical-anarchist.github.io/sri-yantra-studio/
 
 ## Run it
 
@@ -41,7 +50,7 @@ See [docs/MATH.md](docs/MATH.md).
 
 | Folder         | What it holds                                                        |
 |----------------|----------------------------------------------------------------------|
-| `src/core`     | Exact solver, planar arrangement, scene builder, shared types        |
+| `src/core`     | Sri Yantra solver, figures, planar arrangement, scene builder, types |
 | `src/outer`    | Circles, lotus rings, beads, mantra rings, bhupura gates             |
 | `src/text`     | Sanskrit label sets, HarfBuzz shaping to outlines, transliteration   |
 | `src/export`   | SVG, PDF, PNG, DXF writers at true millimetre size                   |

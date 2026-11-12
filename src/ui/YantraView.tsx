@@ -96,7 +96,7 @@ function hashSegment(prims: Prim[]): string {
 const PRECISE = new Set(['triangles', 'cells', 'bindu', 'guides']);
 
 function paintProps(paint: Paint, layer: string, unitMm: number, minSw: number) {
-  const miter = layer === 'triangles' || layer === 'cells';
+  const miter = layer === 'triangles' || layer === 'cells' || layer.startsWith('fig:');
   return {
     fill: paint.fill ?? 'none',
     stroke: paint.stroke ?? 'none',

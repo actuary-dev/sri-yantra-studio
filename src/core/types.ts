@@ -92,6 +92,11 @@ export type Prim = PathPrim | CirclePrim | TextPrim;
  *  'ring4' (8) · 'ring5' (1 central triangle) · 'marma' (18 three-line points) ·
  *  'sandhi' (two-line points) · `band:<id>` (petals / beads of that band) ·
  *  'gates' (4) · 'corners' (4)
+ * The groups 'bindu', 'ring1'…'ring5', 'cells', 'marma', 'sandhi' exist only when the
+ * design has a Sri Yantra figure. Two groups exist for EVERY design, whatever figures it has:
+ *  'points'  — every corner and every crossing of the straight lines at the centre
+ *  'regions' — every enclosed area those lines form
+ * both ordered top-to-bottom, left-to-right.
  * Within a group, anchors are ordered starting at the bottom of the screen and
  * proceeding anticlockwise as seen on screen (bottom → right → top → left),
  * except 'marma' and 'sandhi' which run top-to-bottom, left-to-right.
@@ -222,6 +227,69 @@ export interface BhupuraBand extends BandBase {
 
 export type Band = CircleBand | LotusBand | BeadBand | TextRingBand | BhupuraBand;
 
+/* --------------------------------------------------------- centre figures */
+
+interface FigureBase {
+  id: string;
+  visible: boolean;
+}
+
+/** The nine interlocking triangles. Shape comes from `design.geometry`, line style from `design.triangles`/`design.cells`. */
+export interface SriFigure extends FigureBase {
+  type: 'sri';
+  /** radius of its circumscribing circle, scene units (1 = fills the first circle) */
+  radius: number;
+}
+
+/**
+ * A regular polygon or star, centred on the yantra.
+ *  sides 3, step 1 = triangle · sides 6, step 2 = hexagram (two triangles) ·
+ *  sides 5, step 2 = pentagram · sides 8, step 2 = two squares · sides 8, step 3 = eight-pointed star.
+ */
+export interface PolygonFigure extends FigureBase {
+  type: 'polygon';
+  /** number of corners, 3–36 */
+  sides: number;
+  /** 1 = plain polygon; k = each corner is joined to the k-th next one */
+  step: number;
+  /** distance from the centre to the corners, scene units */
+  radius: number;
+  /** 0 = a corner points straight up; degrees clockwise */
+  rotationDeg: number;
+  /** number of concentric copies (1 = just one) */
+  nest: number;
+  /** each further copy is this fraction of the previous one's size (0.3–0.97) */
+  nestRatio: number;
+  lineMm: number;
+  /** parallel inner outlines, 1–3 */
+  lines: number;
+  lineGapMm: number;
+  fill: string | null;
+}
+
+export interface CircleFigure extends FigureBase {
+  type: 'circle';
+  radius: number;
+  count: number;
+  spacing: number;
+  lineMm: number;
+}
+
+/** A number square (magic square) or letter table. */
+export interface GridFigure extends FigureBase {
+  type: 'grid';
+  rows: number;
+  cols: number;
+  /** total width, scene units; cells are square */
+  size: number;
+  /** row by row, left to right */
+  texts: string[];
+  textSizeMm: number;
+  lineMm: number;
+}
+
+export type CentreFigure = SriFigure | PolygonFigure | CircleFigure | GridFigure;
+
 export type Orient = 'upright' | 'radial' | 'tangent' | 'fixed';
 
 export interface LabelOverride {
@@ -287,7 +355,10 @@ export interface Design {
   updatedAt: number;
   /** finished overall width (outermost edge to outermost edge), millimetres */
   sizeMm: number;
+  /** shape of the Sri Yantra figure (used only when `centre` contains one) */
   geometry: GeometrySpec;
+  /** the figures at the heart of the yantra, drawn in order (first = underneath) */
+  centre: CentreFigure[];
   triangles: {
     visible: boolean;
     lineMm: number;
@@ -328,6 +399,9 @@ export interface TriangleInfo {
 }
 
 export interface GeometryReport {
+  /** true when the design contains a visible Sri Yantra figure; the fields below describe it */
+  hasSri: boolean;
+  /** false only when a Sri Yantra figure is present and its geometry has no valid solution */
   ok: boolean;
   /** largest distance (scene units) by which any of the 18 triple intersections fails to close */
   concurrencyError: number;

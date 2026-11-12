@@ -14,9 +14,9 @@ export default defineConfig({
       includeAssets: ['fonts/*.ttf', 'icon.svg'],
       workbox: { globPatterns: ['**/*.{js,css,html,svg,png,ttf,wasm,woff2}'], maximumFileSizeToCacheInBytes: 8 * 1024 * 1024 },
       manifest: {
-        name: 'Sri Yantra Studio',
-        short_name: 'Sri Yantra',
-        description: 'Design precise Sri Yantras for engraving and print',
+        name: 'Yantra Studio',
+        short_name: 'Yantra',
+        description: 'Design precise yantras for engraving and print',
         theme_color: '#f5f1e8',
         background_color: '#f5f1e8',
         display: 'standalone',

@@ -84,7 +84,7 @@ export function buildItems(scene: Scene, opts: ExportOptions, pl: Placement = co
       strokeMm: hasStroke ? widthMm(p.paint.strokeMm) : 0,
       fill: col(p.paint.fill),
     };
-    const miter = p.layer === 'triangles' || p.layer === 'cells';
+    const miter = p.layer === 'triangles' || p.layer === 'cells' || p.layer.startsWith('fig:');
     if (p.kind === 'path') out.push({ kind: 'path', layer: p.layer, d: mapPath(p.d), evenodd: false, miter, ...st });
     else out.push({ kind: 'circle', layer: p.layer, cx: X(p.cx), cy: Y(p.cy), r: p.r * k, miter, ...st });
   }

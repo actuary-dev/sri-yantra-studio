@@ -15,7 +15,7 @@ import { PromptDialog } from './components/PromptDialog';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { SliderRow } from './components/SliderRow';
 import { SanskritInput } from './components/SanskritInput';
-import { ShapePanel } from './panels/ShapePanel';
+import { CentrePanel } from './panels/CentrePanel';
 import { RingsPanel } from './panels/RingsPanel';
 import { TextPanel } from './panels/TextPanel';
 import { StylePanel } from './panels/StylePanel';
@@ -49,7 +49,7 @@ function PanelContent({ id, design, scene }: PanelProps & { id: PanelId }) {
       )}
     >
       <div className="panel">
-        {id === 'shape' && <ShapePanel design={design} scene={scene} />}
+        {id === 'shape' && <CentrePanel design={design} scene={scene} />}
         {id === 'rings' && <RingsPanel design={design} scene={scene} />}
         {id === 'text' && <TextPanel design={design} scene={scene} />}
         {id === 'style' && <StylePanel design={design} scene={scene} />}
