@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="g" cx="50%" cy="42%" r="75%">
+      <stop offset="0" stop-color="#e8622a"/>
+      <stop offset="0.6" stop-color="#c2410c"/>
+      <stop offset="1" stop-color="#8f2a08"/>
+    </radialGradient>
+  </defs>
+  <!-- full-bleed ground so the icon also works as a maskable icon; the motif stays inside the 80 % safe zone -->
+  <rect width="512" height="512" fill="url(#g)"/>
+  <g fill="none" stroke="#fdf3df" stroke-linejoin="miter" stroke-width="7">
+    <circle cx="256" cy="256" r="158"/>
+    <circle cx="256" cy="256" r="172" stroke-width="3.5" opacity="0.75"/>
+    <!-- downward (Shakti) triangles -->
+    <path d="M115 206 397 206 256 406Z"/>
+    <path d="M161 140 351 140 256 302Z"/>
+    <path d="M184 252 328 252 256 340Z" stroke-width="5.5"/>
+    <!-- upward (Shiva) triangles -->
+    <path d="M109 287 403 287 256 106Z"/>
+    <path d="M145 357 367 357 256 206Z"/>
+    <path d="M196 274 316 274 256 186Z" stroke-width="5.5"/>
+  </g>
+  <circle cx="256" cy="262" r="10" fill="#fdf3df"/>
+</svg>
