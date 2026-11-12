@@ -31,6 +31,7 @@ const KIND_DEFS: KindDef[] = [
   { kind: 'point-numbers', name: 'Numbers at every crossing', nameHi: 'प्रत्येक सन्धि पर संख्या', defaultGroup: 'points', description: 'A number at every corner and crossing of the centre figures.', texts: nums(400), sizeMm: 3, offset: 0.03 },
   { kind: 'region-numbers', name: 'Numbers in every space', nameHi: 'प्रत्येक कोष्ठ में संख्या', defaultGroup: 'regions', description: 'A number in every enclosed space of the centre figures. Change any of them to a letter or mantra.', texts: nums(400), sizeMm: 4, offset: 0 },
   { kind: 'region-blank', name: 'Empty labels in every space', nameHi: 'प्रत्येक कोष्ठ में रिक्त स्थान', defaultGroup: 'regions', description: 'An empty label in every enclosed space, for you to fill in.', texts: Array.from({ length: 400 }, () => ''), sizeMm: 4, offset: 0 },
+  { kind: 'ring-blank', name: 'Empty labels around a ring', nameHi: 'वलय पर रिक्त स्थान', defaultGroup: 'band:l16', description: 'An empty label on each petal, bead or sector of a ring, for you to fill in.', texts: Array.from({ length: 128 }, () => ''), sizeMm: 6, offset: 0 },
   { kind: 'blank', name: 'Blank (fill in by hand)', nameHi: 'रिक्त', defaultGroup: 'cells', description: 'Empty labels on all 43 cells for you to fill in.', texts: Array.from({ length: 43 }, () => ''), sizeMm: 4, offset: 0 },
 ];
 

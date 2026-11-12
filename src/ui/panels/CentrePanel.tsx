@@ -1,8 +1,8 @@
 /** CENTRE: the figures at the heart of the yantra — triangles, stars, circles, number squares, the Sri Yantra. */
 import { useState } from 'react';
-import { centreOf } from '../../core';
-import type { CentreFigure, CircleFigure, GridFigure, PolygonFigure, SriFigure } from '../../core/types';
-import { circleFigure, gridFigure, newId, polygonFigure, sriFigure } from '../../presets';
+import { centreOf, latticeHollow, latticeLines } from '../../core';
+import type { CentreFigure, CircleFigure, GridFigure, LatticeFigure, LotusFigure, Orbit, PetalShape, PolygonFigure, RaysFigure, SriFigure } from '../../core/types';
+import { circleFigure, gridFigure, latticeFigure, lotusFigure, newId, polygonFigure, raysFigure, sriFigure } from '../../presets';
 import { toDevanagariNumber } from '../../text';
 import { updateDesign as update } from '../store';
 import { useT, type TFn, type TKey } from '../i18n';
@@ -17,7 +17,7 @@ import { Icon } from '../components/Icon';
 import { ActionSheet } from '../components/ActionSheet';
 import { BinduGuides, ShapePanel } from './ShapePanel';
 
-const GLYPH: Record<CentreFigure['type'], string> = { sri: '✡', polygon: '△', circle: '○', grid: '▦' };
+const GLYPH: Record<CentreFigure['type'], string> = { sri: '✡', polygon: '△', circle: '○', grid: '▦', lotus: '❀', rays: '✳', lattice: '▲' };
 
 function updFig<T extends CentreFigure>(id: string, fn: (f: T) => void, coalesceKey?: string) {
   update(
@@ -54,6 +54,12 @@ function figureName(f: CentreFigure, t: TFn): string {
       return f.count > 1 ? t('fig.circleN', { n: f.count }) : t('fig.circle');
     case 'grid':
       return t('fig.grid', { r: f.rows, c: f.cols });
+    case 'lotus':
+      return t('band.lotusN', { n: f.petals });
+    case 'rays':
+      return t('fig.raysN', { n: f.count });
+    case 'lattice':
+      return t('fig.lattice', { n: latticeLines(f).cells });
   }
 }
 
@@ -71,7 +77,7 @@ function LineWeight({ id, value }: { id: string; value: number }) {
         step={0.01}
         log
         display={`${value.toFixed(2)} mm`}
-        onChange={(v) => updFig<PolygonFigure | CircleFigure | GridFigure>(id, (x) => { x.lineMm = v; }, 'line')}
+        onChange={(v) => updFig<Exclude<CentreFigure, SriFigure>>(id, (x) => { x.lineMm = v; }, 'line')}
       />
     </Block>
   );
@@ -183,6 +189,7 @@ function PolygonControls({ f, unitMm }: { f: PolygonFigure; unitMm: number }) {
           />
         </Block>
       )}
+      <OrbitControls id={f.id} orbit={f.orbit} unitMm={unitMm} />
       <LineWeight id={f.id} value={f.lineMm} />
       <Row label={t('shape.parallel')}>
         <Stepper label={t('shape.parallel')} value={f.lines} min={1} max={3} onChange={(v) => updFig<PolygonFigure>(f.id, (x) => { x.lines = v; })} />
@@ -242,6 +249,166 @@ function CircleControls({ f, unitMm }: { f: CircleFigure; unitMm: number }) {
           />
         </Block>
       )}
+      <OrbitControls id={f.id} orbit={f.orbit} unitMm={unitMm} />
+      <LineWeight id={f.id} value={f.lineMm} />
+    </>
+  );
+}
+
+/** Repeat a figure around the centre (or simply move it off-centre with a count of one). */
+function OrbitControls({ id, orbit, unitMm }: { id: string; orbit: Orbit | undefined; unitMm: number }) {
+  const t = useT();
+  const count = orbit && orbit.count >= 1 ? Math.round(orbit.count) : 0;
+  type Orbiting = PolygonFigure | CircleFigure;
+  return (
+    <>
+      <Row label={t('orbit.count')} sub={t('orbit.countSub')}>
+        <Stepper
+          label={t('orbit.count')}
+          value={count}
+          min={0}
+          max={36}
+          onChange={(v) =>
+            updFig<Orbiting>(id, (x) => {
+              if (v <= 0) delete x.orbit;
+              else x.orbit = { count: v, radius: x.orbit?.radius ?? 0.6, phaseDeg: x.orbit?.phaseDeg ?? 0 };
+            })
+          }
+        />
+      </Row>
+      {orbit && count > 0 && (
+        <>
+          <Block>
+            <SliderRow
+              label={t('orbit.radius')}
+              value={orbit.radius}
+              min={0}
+              max={2.5}
+              step={0.005}
+              display={mmOf(orbit.radius, unitMm)}
+              onChange={(v) => updFig<Orbiting>(id, (x) => { if (x.orbit) x.orbit.radius = v; }, 'orbitR')}
+            />
+          </Block>
+          <Block>
+            <SliderRow
+              label={t('orbit.phase')}
+              value={norm(orbit.phaseDeg)}
+              min={-180}
+              max={180}
+              step={0.5}
+              display={`${norm(orbit.phaseDeg).toFixed(1)}°`}
+              onChange={(v) => updFig<Orbiting>(id, (x) => { if (x.orbit) x.orbit.phaseDeg = v; }, 'orbitP')}
+            />
+          </Block>
+        </>
+      )}
+    </>
+  );
+}
+
+const PETAL_SHAPES: PetalShape[] = ['classic', 'pointed', 'round', 'flame', 'lotus'];
+
+function LotusControls({ f, unitMm }: { f: LotusFigure; unitMm: number }) {
+  const t = useT();
+  return (
+    <>
+      <Row label={t('rings.petals')}>
+        <Stepper label={t('rings.petals')} value={f.petals} min={2} max={128} onChange={(v) => updFig<LotusFigure>(f.id, (x) => { x.petals = v; })} />
+      </Row>
+      <Block>
+        <Chips<PetalShape>
+          label={t('poly.quick')}
+          value={f.shape}
+          onChange={(v) => updFig<LotusFigure>(f.id, (x) => { x.shape = v; })}
+          options={PETAL_SHAPES.map((sh) => ({ value: sh, label: t(`petal.${sh}` as TKey) }))}
+        />
+      </Block>
+      <Block>
+        <SliderRow label={t('poly.size')} value={f.radius} min={0.02} max={2.5} step={0.005} display={mmOf(f.radius * 2, unitMm)} onChange={(v) => updFig<LotusFigure>(f.id, (x) => { x.radius = v; }, 'radius')} />
+      </Block>
+      <Block>
+        <SliderRow label={t('rings.height')} value={f.height} min={0.02} max={1} step={0.005} display={mmOf(f.height, unitMm)} onChange={(v) => updFig<LotusFigure>(f.id, (x) => { x.height = v; }, 'height')} />
+      </Block>
+      <Block>
+        <SliderRow label={t('rings.fullness')} value={f.fullness} min={0} max={1} step={0.01} display={`${Math.round(f.fullness * 100)} %`} onChange={(v) => updFig<LotusFigure>(f.id, (x) => { x.fullness = v; }, 'full')} />
+      </Block>
+      <Block>
+        <SliderRow label={t('rings.tip')} value={f.tip} min={0} max={1} step={0.01} display={`${Math.round(f.tip * 100)} %`} onChange={(v) => updFig<LotusFigure>(f.id, (x) => { x.tip = v; }, 'tip')} />
+      </Block>
+      <Row label={t('rings.tipAtTop')}>
+        <Switch label={t('rings.tipAtTop')} checked={f.tipAtTop} onChange={(v) => updFig<LotusFigure>(f.id, (x) => { x.tipAtTop = v; })} />
+      </Row>
+      <LineWeight id={f.id} value={f.lineMm} />
+      <Row label={t('poly.fill')} sub={f.fill ? undefined : t('rings.noFill')}>
+        <div className="inline-controls">
+          {f.fill && <ColorWell value={f.fill} onChange={(v) => updFig<LotusFigure>(f.id, (x) => { x.fill = v; }, 'fill')} label={t('poly.fill')} />}
+          <Switch label={t('poly.fill')} checked={!!f.fill} onChange={(on) => updFig<LotusFigure>(f.id, (x) => { x.fill = on ? '#c0392b' : null; })} />
+        </div>
+      </Row>
+    </>
+  );
+}
+
+function RaysControls({ f, unitMm }: { f: RaysFigure; unitMm: number }) {
+  const t = useT();
+  return (
+    <>
+      <Row label={t('rays.count')}>
+        <Stepper label={t('rays.count')} value={f.count} min={1} max={108} onChange={(v) => updFig<RaysFigure>(f.id, (x) => { x.count = v; })} />
+      </Row>
+      <Block>
+        <SliderRow label={t('rays.inner')} value={f.inner} min={0} max={2.5} step={0.005} display={mmOf(f.inner, unitMm)} onChange={(v) => updFig<RaysFigure>(f.id, (x) => { x.inner = Math.min(v, x.outer - 0.01); }, 'inner')} />
+      </Block>
+      <Block>
+        <SliderRow label={t('rays.outer')} value={f.outer} min={0.05} max={2.5} step={0.005} display={mmOf(f.outer, unitMm)} onChange={(v) => updFig<RaysFigure>(f.id, (x) => { x.outer = Math.max(v, x.inner + 0.01); }, 'outer')} />
+      </Block>
+      <Block>
+        <SliderRow label={t('poly.turn')} value={norm(f.rotationDeg)} min={-180} max={180} step={0.5} display={`${norm(f.rotationDeg).toFixed(1)}°`} onChange={(v) => updFig<RaysFigure>(f.id, (x) => { x.rotationDeg = v; }, 'turn')} />
+      </Block>
+      <LineWeight id={f.id} value={f.lineMm} />
+    </>
+  );
+}
+
+function LatticeControls({ f, unitMm }: { f: LatticeFigure; unitMm: number }) {
+  const t = useT();
+  const hollow = latticeHollow(f.rows, f.hollow);
+  const down = Math.abs(Math.abs(norm(f.rotationDeg)) - 180) < 0.01;
+  const up = Math.abs(norm(f.rotationDeg)) < 0.01;
+  // only some hollow sizes sit on the lattice: step to the next one that fits
+  const nextHollow = (dir: 1 | -1) => {
+    for (let h = hollow + dir; h >= 0 && h < f.rows; h += dir) if (latticeHollow(f.rows, h) === h) return h;
+    return hollow;
+  };
+  return (
+    <>
+      <Row label={t('lattice.rows')}>
+        <Stepper label={t('lattice.rows')} value={f.rows} min={1} max={16} onChange={(v) => updFig<LatticeFigure>(f.id, (x) => { x.rows = v; x.hollow = latticeHollow(v, x.hollow); })} />
+      </Row>
+      <Row label={t('lattice.hollow')} sub={t('lattice.hollowSub')}>
+        <div className="inline-controls">
+          <button type="button" className="pill-btn" aria-label="−" disabled={nextHollow(-1) === hollow} onClick={() => updFig<LatticeFigure>(f.id, (x) => { x.hollow = nextHollow(-1); })}>−</button>
+          <span className="row-label" style={{ minWidth: 24, textAlign: 'center' }}>{hollow}</span>
+          <button type="button" className="pill-btn" aria-label="+" disabled={nextHollow(1) === hollow} onClick={() => updFig<LatticeFigure>(f.id, (x) => { x.hollow = nextHollow(1); })}>+</button>
+        </div>
+      </Row>
+      <Block>
+        <SliderRow label={t('poly.size')} value={f.radius} min={0.05} max={2.5} step={0.005} display={mmOf(f.radius * 2, unitMm)} onChange={(v) => updFig<LatticeFigure>(f.id, (x) => { x.radius = v; }, 'radius')} />
+      </Block>
+      <Block>
+        <Segmented<'up' | 'down' | 'other'>
+          label={t('poly.direction')}
+          value={up ? 'up' : down ? 'down' : 'other'}
+          onChange={(v) => { if (v !== 'other') updFig<LatticeFigure>(f.id, (x) => { x.rotationDeg = v === 'up' ? 0 : 180; }); }}
+          options={[
+            { value: 'up', label: `▲ ${t('poly.up')}` },
+            { value: 'down', label: `▼ ${t('poly.down')}` },
+          ]}
+        />
+      </Block>
+      <Block>
+        <SliderRow label={t('poly.turn')} value={norm(f.rotationDeg)} min={-180} max={180} step={0.5} display={`${norm(f.rotationDeg).toFixed(1)}°`} onChange={(v) => updFig<LatticeFigure>(f.id, (x) => { x.rotationDeg = v; }, 'turn')} />
+      </Block>
       <LineWeight id={f.id} value={f.lineMm} />
     </>
   );
@@ -362,7 +529,7 @@ function SriControls({ f, unitMm }: { f: SriFigure; unitMm: number }) {
   );
 }
 
-type AddKind = 'triangle' | 'star6' | 'square' | 'polygon' | 'circle' | 'grid' | 'sri';
+type AddKind = 'triangle' | 'star6' | 'square' | 'polygon' | 'circle' | 'lotus' | 'rays' | 'lattice' | 'grid' | 'sri';
 
 export function CentrePanel({ design, scene }: PanelProps) {
   const t = useT();
@@ -393,7 +560,7 @@ export function CentrePanel({ design, scene }: PanelProps) {
   const add = (kind: AddKind) => {
     const id = newId('f');
     // a new figure starts a little smaller than the smallest one already there, so it is easy to see
-    const radii = figures.filter((f): f is PolygonFigure | CircleFigure | SriFigure => f.type !== 'grid').map((f) => f.radius);
+    const radii = figures.filter((f): f is PolygonFigure | CircleFigure | SriFigure | LotusFigure | LatticeFigure => 'radius' in f).map((f) => f.radius);
     const r = radii.length ? Math.max(0.12, Math.min(...radii) * 0.6) : 1;
     const fig: CentreFigure =
       kind === 'triangle'
@@ -406,6 +573,12 @@ export function CentrePanel({ design, scene }: PanelProps) {
               ? polygonFigure(id, 8, { step: 3, radius: r, lineMm })
               : kind === 'circle'
                 ? circleFigure(id, r, { lineMm })
+                : kind === 'lotus'
+                  ? lotusFigure(id, 8, r * 0.6, { height: r * 0.35, lineMm })
+                  : kind === 'rays'
+                    ? raysFigure(id, 12, { inner: 0, outer: r, lineMm })
+                    : kind === 'lattice'
+                      ? latticeFigure(id, 4, { radius: r, lineMm })
                 : kind === 'grid'
                   ? gridFigure(id, 3, 3, [6, 1, 8, 7, 5, 3, 2, 9, 4], { size: Math.min(1.2, r * 1.3), textSizeMm: Math.max(3, design.sizeMm / 22), lineMm })
                   : sriFigure(id, 1);
@@ -416,8 +589,8 @@ export function CentrePanel({ design, scene }: PanelProps) {
     setOpen(id);
   };
 
-  const kinds: AddKind[] = ['triangle', 'star6', 'square', 'polygon', 'circle', 'grid', ...(hasSri ? [] : (['sri'] as AddKind[]))];
-  const addGlyph: Record<AddKind, string> = { triangle: '▼', star6: '✡', square: '■', polygon: '✴', circle: '○', grid: '▦', sri: '✡' };
+  const kinds: AddKind[] = ['triangle', 'star6', 'square', 'polygon', 'circle', 'lotus', 'rays', 'lattice', 'grid', ...(hasSri ? [] : (['sri'] as AddKind[]))];
+  const addGlyph: Record<AddKind, string> = { triangle: '▼', star6: '✡', square: '■', polygon: '✴', circle: '○', lotus: '❀', rays: '✳', lattice: '▲', grid: '▦', sri: '✡' };
 
   return (
     <>
@@ -465,6 +638,9 @@ export function CentrePanel({ design, scene }: PanelProps) {
                   {f.type === 'circle' && <CircleControls f={f} unitMm={scene.unitMm} />}
                   {f.type === 'grid' && <GridControls f={f} unitMm={scene.unitMm} />}
                   {f.type === 'sri' && <SriControls f={f} unitMm={scene.unitMm} />}
+                  {f.type === 'lotus' && <LotusControls f={f} unitMm={scene.unitMm} />}
+                  {f.type === 'rays' && <RaysControls f={f} unitMm={scene.unitMm} />}
+                  {f.type === 'lattice' && <LatticeControls f={f} unitMm={scene.unitMm} />}
                 </div>
               )}
             </div>

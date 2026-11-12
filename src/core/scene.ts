@@ -3,11 +3,11 @@
  * This is the single integration point: centre figures → outer bands → labels.
  */
 import { buildFigure, bottomAnticlockwiseKey, type Figure, type Pt } from './arrangement';
-import { gridLayout, polygonLoops } from './figures';
+import { gridLayout, latticeLines, orbitPlacements, polygonLoops, raySegments } from './figures';
 import { polygon } from './path';
 import { arrange, type Seg } from './planar';
 import { solveGeometry, TRI, TRI_NAMES, TRI_SANSKRIT, TRI_UP, type Solved } from './solver';
-import type { Anchor, CentreFigure, Design, GeometryReport, PathCmd, Prim, Scene, TriangleInfo } from './types';
+import type { Anchor, CentreFigure, Design, GeometryReport, LotusBand, PathCmd, Prim, Scene, TriangleInfo } from './types';
 import { buildBands } from '../outer';
 import { buildLabels, resolveText, type Shaper } from '../text';
 
@@ -107,8 +107,12 @@ export function buildScene(design: Design, shaper?: Shaper): Scene {
   const outer = buildBands(design.bands, 1, { ink, paper, filled: anyFill });
   let extent = Math.max(1.02, outer.extent);
   for (const f of centre) {
-    if (f.type === 'polygon' || f.type === 'sri') extent = Math.max(extent, f.radius * 1.01);
-    else if (f.type === 'circle') extent = Math.max(extent, f.radius + Math.max(0, f.count - 1) * f.spacing);
+    const orbitR = (f.type === 'polygon' || f.type === 'circle') && f.orbit && f.orbit.count >= 1 ? Math.max(0, f.orbit.radius) : 0;
+    if (f.type === 'polygon' || f.type === 'sri') extent = Math.max(extent, orbitR + f.radius * 1.01);
+    else if (f.type === 'circle') extent = Math.max(extent, orbitR + f.radius + Math.max(0, f.count - 1) * f.spacing);
+    else if (f.type === 'lotus') extent = Math.max(extent, (f.radius + f.height) * 1.02);
+    else if (f.type === 'rays') extent = Math.max(extent, f.outer);
+    else if (f.type === 'lattice') extent = Math.max(extent, f.radius * 1.01);
     else if (f.type === 'grid') { const g = gridLayout(f); extent = Math.max(extent, Math.hypot(g.width, g.height) / 2); }
   }
   const unitMm = design.sizeMm / (2 * extent);
@@ -118,6 +122,7 @@ export function buildScene(design: Design, shaper?: Shaper): Scene {
   const anchors: Anchor[] = [];
   const segs: Seg[] = []; // every straight line at the centre, for 'points' and 'regions'
   const gridText: Prim[] = [];
+  const figureAnchors: Anchor[] = [];
   if (anyFill) prims.push({ kind: 'circle', cx: 0, cy: 0, r: 1, layer: 'cells', role: 'ground', paint: { stroke: null, strokeMm: 0, fill: paper } });
 
   for (const f of centre) {
@@ -125,39 +130,82 @@ export function buildScene(design: Design, shaper?: Shaper): Scene {
       if (fig) drawSri(design, fig, prims, mm, ink, segs);
     } else if (f.type === 'polygon') {
       const layer = `fig:${f.id}`;
-      const { copies, apothemRatio } = polygonLoops(f);
       const gap = mm(f.lineGapMm);
       const lines = Math.max(1, Math.min(3, Math.round(f.lines)));
+      const all = orbitPlacements(f.orbit).map((pl) => ({ pl, ...polygonLoops(f, pl) }));
       if (anyFill && f.fill)
-        for (const c of copies.slice(0, 1))
-          for (const loop of c.loops)
+        for (const one of all)
+          for (const loop of one.copies[0].loops)
             if (loop.length >= 3) prims.push({ kind: 'path', d: polygon(loop), layer, role: 'fill', paint: { stroke: null, strokeMm: 0, fill: f.fill } });
-      copies.forEach((c, ci) => {
-        const apothem = Math.max(c.radius * apothemRatio, 1e-6);
-        c.loops.forEach((loop, li) => {
-          for (let k = 0; k < lines; k++) {
-            const scale = 1 - (gap * k) / apothem;
-            if (k > 0 && !(scale > 0.1)) break;
-            const pts = k === 0 ? loop : loop.map((p) => ({ x: p.x * scale, y: p.y * scale }));
-            const d: PathCmd[] = pts.length >= 3 ? polygon(pts) : [['M', pts[0].x, pts[0].y], ['L', pts[1].x, pts[1].y]];
-            prims.push({ kind: 'path', d, layer, role: `polygon:${ci}:${li}:${k}`, paint: { stroke: ink, strokeMm: f.lineMm, fill: null } });
-          }
-          for (let i = 0; i < loop.length; i++) {
-            if (loop.length === 2 && i === 1) break;
-            segs.push({ a: loop[i], b: loop[(i + 1) % loop.length] });
-          }
+      all.forEach(({ pl, copies, apothemRatio }, pi) => {
+        copies.forEach((c, ci) => {
+          const apothem = Math.max(c.radius * apothemRatio, 1e-6);
+          c.loops.forEach((loop, li) => {
+            for (let k = 0; k < lines; k++) {
+              const scale = 1 - (gap * k) / apothem;
+              if (k > 0 && !(scale > 0.1)) break;
+              const pts = k === 0 ? loop : loop.map((q) => ({ x: pl.x + (q.x - pl.x) * scale, y: pl.y + (q.y - pl.y) * scale }));
+              const d: PathCmd[] = pts.length >= 3 ? polygon(pts) : [['M', pts[0].x, pts[0].y], ['L', pts[1].x, pts[1].y]];
+              prims.push({ kind: 'path', d, layer, role: `polygon:${pi}:${ci}:${li}:${k}`, paint: { stroke: ink, strokeMm: f.lineMm, fill: null } });
+            }
+            for (let i = 0; i < loop.length; i++) {
+              if (loop.length === 2 && i === 1) break;
+              segs.push({ a: loop[i], b: loop[(i + 1) % loop.length] });
+            }
+          });
         });
       });
     } else if (f.type === 'circle') {
       const n = Math.max(1, Math.min(12, Math.round(f.count)));
-      for (let i = 0; i < n; i++)
-        prims.push({ kind: 'circle', cx: 0, cy: 0, r: Math.max(1e-4, f.radius + i * f.spacing), layer: `fig:${f.id}`, role: `circle:${i}`, paint: { stroke: ink, strokeMm: f.lineMm, fill: null } });
+      for (const pl of orbitPlacements(f.orbit))
+        for (let i = 0; i < n; i++)
+          prims.push({ kind: 'circle', cx: pl.x, cy: pl.y, r: Math.max(1e-4, f.radius + i * f.spacing), layer: `fig:${f.id}`, role: `circle:${i}`, paint: { stroke: ink, strokeMm: f.lineMm, fill: null } });
+    } else if (f.type === 'lotus') {
+      const band: LotusBand = {
+        id: f.id, type: 'lotus', visible: true, gap: 0, lineMm: f.lineMm, petals: f.petals, height: f.height, shape: f.shape,
+        fullness: f.fullness, tip: f.tip, tipAtTop: f.tipAtTop, rows: 1, insets: 0, vein: false, fill: f.fill,
+      };
+      const ring = buildBands([band], Math.max(0.01, f.radius), { ink, paper, filled: anyFill });
+      prims.push(...ring.prims);
+      figureAnchors.push(...ring.anchors);
+    } else if (f.type === 'rays') {
+      const rays = raySegments(f);
+      const d: PathCmd[] = [];
+      for (const [p0, p1] of rays.segs) {
+        d.push(['M', p0.x, p0.y], ['L', p1.x, p1.y]);
+        segs.push({ a: p0, b: p1 });
+      }
+      prims.push({ kind: 'path', d, layer: `fig:${f.id}`, role: 'rays', paint: { stroke: ink, strokeMm: f.lineMm, fill: null } });
+      // one place for text in the middle of each sector, ordered from the bottom, anticlockwise as seen
+      const mid = rays.inner > 0 ? (rays.inner + rays.outer) / 2 : rays.outer * 0.62;
+      const half = Math.PI / rays.segs.length;
+      const free = Math.max(0.01, Math.min((rays.outer - rays.inner) * 0.3, rays.segs.length > 1 ? mid * Math.sin(half) * 0.8 : mid * 0.5));
+      const sectors = rays.sectorDeg
+        .map((dg) => ({ dg, x: mid * Math.cos((dg * Math.PI) / 180), y: mid * Math.sin((dg * Math.PI) / 180) }))
+        .sort((u, v) => bottomAnticlockwiseKey(u.x, u.y) - bottomAnticlockwiseKey(v.x, v.y));
+      sectors.forEach((sct, i) =>
+        figureAnchors.push({ id: `band:${f.id}:${i}`, group: `band:${f.id}`, index: i, x: sct.x, y: sct.y, r: free, outDeg: ((sct.dg % 360) + 360) % 360 }),
+      );
+    } else if (f.type === 'lattice') {
+      const d: PathCmd[] = [];
+      for (const [p0, p1] of latticeLines(f).lines) {
+        d.push(['M', p0.x, p0.y], ['L', p1.x, p1.y]);
+        segs.push({ a: p0, b: p1 });
+      }
+      prims.push({ kind: 'path', d, layer: `fig:${f.id}`, role: 'lattice', paint: { stroke: ink, strokeMm: f.lineMm, fill: null } });
     } else if (f.type === 'grid') {
       const g = gridLayout(f);
       const d: PathCmd[] = [];
       for (let c = 0; c <= g.cols; c++) d.push(['M', g.x0 + c * g.cell, g.y0], ['L', g.x0 + c * g.cell, g.y0 + g.height]);
       for (let r = 0; r <= g.rows; r++) d.push(['M', g.x0, g.y0 + r * g.cell], ['L', g.x0 + g.width, g.y0 + r * g.cell]);
       prims.push({ kind: 'path', d, layer: `fig:${f.id}`, role: 'grid', paint: { stroke: ink, strokeMm: f.lineMm, fill: null } });
+      const blocks = Math.round(f.blocks ?? 0);
+      if (blocks > 1) {
+        const heavy: PathCmd[] = [];
+        for (let c = 0; c <= g.cols; c += blocks) heavy.push(['M', g.x0 + c * g.cell, g.y0], ['L', g.x0 + c * g.cell, g.y0 + g.height]);
+        for (let r = 0; r <= g.rows; r += blocks) heavy.push(['M', g.x0, g.y0 + r * g.cell], ['L', g.x0 + g.width, g.y0 + r * g.cell]);
+        prims.push({ kind: 'path', d: heavy, layer: `fig:${f.id}`, role: 'grid-blocks', paint: { stroke: ink, strokeMm: f.lineMm * 2.6, fill: null } });
+      }
       for (let r = 0; r < g.rows; r++)
         for (let c = 0; c < g.cols; c++) {
           const text = (f.texts[r * g.cols + c] ?? '').trim();
@@ -234,7 +282,7 @@ export function buildScene(design: Design, shaper?: Shaper): Scene {
   arr.regions.forEach((rg, i) =>
     anchors.push({ id: `regions:${i}`, group: 'regions', index: i, x: rg.centre.x, y: rg.centre.y, r: rg.r, outDeg: outDeg(rg.centre) }),
   );
-  anchors.push(...outer.anchors);
+  anchors.push(...figureAnchors, ...outer.anchors);
 
   const report = makeReport(!!sriSpec, solved, unitFig);
   let scene: Scene = { prims, extent, unitMm, anchors, report, ink, paper };

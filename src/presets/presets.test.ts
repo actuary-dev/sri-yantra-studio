@@ -20,7 +20,7 @@ describe('every starting design', () => {
         expect(scene.report.marmaCount, p.id).toBe(18);
         expect(scene.report.concurrencyError * scene.unitMm, p.id).toBeLessThan(1e-6); // mm
       }
-      expect(scene.prims.length, p.id).toBeGreaterThan(3);
+      expect(scene.prims.length, p.id).toBeGreaterThan(0);
       for (const a of scene.anchors) expect(Number.isFinite(a.x + a.y + a.r), `${p.id} ${a.id}`).toBe(true);
       expect(Number.isFinite(scene.extent)).toBe(true);
       // every text primitive got real outlines

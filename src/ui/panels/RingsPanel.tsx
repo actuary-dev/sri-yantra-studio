@@ -145,7 +145,7 @@ function LotusControls({ b, unitMm }: EditorProps<LotusBand>) {
   return (
     <>
       <Row label={t('rings.petals')}>
-        <Stepper label={t('rings.petals')} value={b.petals} min={4} max={128} onChange={(v) => updBand<LotusBand>(b.id, (x) => { x.petals = v; }, 'petals')} />
+        <Stepper label={t('rings.petals')} value={b.petals} min={2} max={128} onChange={(v) => updBand<LotusBand>(b.id, (x) => { x.petals = v; }, 'petals')} />
       </Row>
       <Block>
         <Chips

@@ -38,11 +38,12 @@ const INSET_SCALES = [0.8, 0.62, 0.46];
 
 export function buildLotus(b: LotusBand, r: number, ctx: { ink: string; paper: string; filled: boolean }): LotusOut {
   const layer = `band:${b.id}`;
-  const n = clamp(Math.round(fin(b.petals, 8)), 3, 360);
+  const n = clamp(Math.round(fin(b.petals, 8)), 2, 360);
   const height = Math.max(1e-4, fin(b.height, 0.2));
   const rows = b.rows === 2 ? 2 : 1;
   const insets = clamp(Math.round(fin(b.insets, 0)), 0, 3);
-  const prof = petalProfile(b.shape, n, r, height, fin(b.fullness, 0.6), fin(b.tip, 0.6));
+  // two petals (as on the Ajna lotus) are shaped like the petals of a three-petalled flower, set opposite each other
+  const prof = petalProfile(b.shape, Math.max(n, 3), r, height, fin(b.fullness, 0.6), fin(b.tip, 0.6));
   const step = 360 / n;
   const theta0 = b.tipAtTop ? -90 : -90 + step / 2;
   const stroke = { stroke: ctx.ink, strokeMm: b.lineMm, fill: null };

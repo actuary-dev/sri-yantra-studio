@@ -97,7 +97,7 @@ export function Gallery() {
         {tab === 'designs' ? (
           <>
             <p className="gallery-intro">{t('gallery.intro')}</p>
-            {(['forms', 'numbers', 'sri'] as const).map((cat) => (
+            {(['forms', 'mahavidya', 'chakras', 'numbers', 'sri'] as const).map((cat) => (
               <section key={cat} aria-label={t(`gallery.cat.${cat}`)}>
                 <h2 className="group-title" style={{ margin: '22px 4px 10px', fontSize: 15 }}>{t(`gallery.cat.${cat}`)}</h2>
                 <div className="card-grid">

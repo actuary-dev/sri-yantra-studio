@@ -265,6 +265,18 @@ export interface PolygonFigure extends FigureBase {
   lines: number;
   lineGapMm: number;
   fill: string | null;
+  orbit?: Orbit;
+}
+
+/**
+ * Repeats a figure around the centre: `count` copies on a circle of radius `radius`,
+ * the first one at `phaseDeg` (0 = straight up, clockwise). Each copy is turned to face outward.
+ * count 1 simply moves the figure off-centre.
+ */
+export interface Orbit {
+  count: number;
+  radius: number;
+  phaseDeg: number;
 }
 
 export interface CircleFigure extends FigureBase {
@@ -272,6 +284,47 @@ export interface CircleFigure extends FigureBase {
   radius: number;
   count: number;
   spacing: number;
+  lineMm: number;
+  orbit?: Orbit;
+}
+
+/** A ring of lotus petals at any radius (inside or outside other figures). */
+export interface LotusFigure extends FigureBase {
+  type: 'lotus';
+  /** radius of the circle the petals grow from */
+  radius: number;
+  petals: number;
+  height: number;
+  shape: PetalShape;
+  fullness: number;
+  tip: number;
+  tipAtTop: boolean;
+  lineMm: number;
+  fill: string | null;
+}
+
+/** Spokes: straight lines radiating from the centre, dividing the space into equal sectors. */
+export interface RaysFigure extends FigureBase {
+  type: 'rays';
+  count: number;
+  /** where each spoke starts and ends, scene units from the centre */
+  inner: number;
+  outer: number;
+  rotationDeg: number;
+  lineMm: number;
+}
+
+/**
+ * A triangle divided into rows of small triangles (rows 5 → 25 small triangles).
+ * `hollow` leaves an undivided triangle of that many rows at the centre:
+ * rows 5, hollow 2 gives 21 small triangles around a central one.
+ */
+export interface LatticeFigure extends FigureBase {
+  type: 'lattice';
+  rows: number;
+  hollow: number;
+  radius: number;
+  rotationDeg: number;
   lineMm: number;
 }
 
@@ -286,9 +339,11 @@ export interface GridFigure extends FigureBase {
   texts: string[];
   textSizeMm: number;
   lineMm: number;
+  /** draw a heavier line every this many cells (0 = none), e.g. 3 for nine 3×3 blocks */
+  blocks?: number;
 }
 
-export type CentreFigure = SriFigure | PolygonFigure | CircleFigure | GridFigure;
+export type CentreFigure = SriFigure | PolygonFigure | CircleFigure | GridFigure | LotusFigure | RaysFigure | LatticeFigure;
 
 export type Orient = 'upright' | 'radial' | 'tangent' | 'fixed';
 

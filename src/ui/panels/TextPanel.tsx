@@ -1,6 +1,6 @@
 /** TEXT: master switch, font, colour, label sets, your own text (custom labels). */
 import { useRef, useState } from 'react';
-import type { Band, CustomLabel, FontId, LabelOverride, LabelSet, Orient } from '../../core/types';
+import type { Band, CustomLabel, FontId, LabelOverride, LabelSet, Orient, CentreFigure } from '../../core/types';
 import { FONT_FILES, LABEL_KINDS, createLabelSet, type LabelKind } from '../../text';
 import { updateDesign as update } from '../store';
 import { setEditorUI, showToast, useEditorUI } from '../runtime';
@@ -235,6 +235,16 @@ function SetEditor({ set, anchorCount, unitMm, maxSize, onDelete }: { set: Label
 
 /* --------------------------------------------------------- add labels */
 
+/** Centre lotuses and spokes offer places for ring labels just like the outer lotus and bead rings. */
+function centreRings(design: { centre?: CentreFigure[] }): Band[] {
+  const out: Band[] = [];
+  for (const f of design.centre ?? []) {
+    if (f.type === 'lotus') out.push({ id: f.id, type: 'lotus', visible: true, gap: 0, lineMm: f.lineMm, petals: f.petals, height: f.height, shape: f.shape, fullness: f.fullness, tip: f.tip, tipAtTop: f.tipAtTop, rows: 1, insets: 0, vein: false, fill: null });
+    else if (f.type === 'rays') out.push({ id: f.id, type: 'beads', visible: true, gap: 0, lineMm: f.lineMm, count: f.count, size: 0, shape: 'dot', fill: null, sectors: true } as Band);
+  }
+  return out;
+}
+
 function targetBands(bands: Band[]): Band[] {
   return bands.filter((b) => b.type === 'lotus' || b.type === 'beads');
 }
@@ -290,7 +300,7 @@ function AddLabelsSheet({ open, onClose, bands }: { open: boolean; onClose(): vo
       setTarget(defaultTarget(k, bands));
     } else create(k);
   };
-  const bandLabel = (b: Band) => (b.type === 'lotus' ? t('band.lotusN', { n: b.petals }) : b.type === 'beads' ? t('band.beadsN', { n: b.count }) : b.id);
+  const bandLabel = (b: Band) => (b.type === 'lotus' ? t('band.lotusN', { n: b.petals }) : b.type === 'beads' ? ((b as { sectors?: boolean }).sectors ? t('fig.raysN', { n: b.count }) : t('band.beadsN', { n: b.count })) : b.id);
 
   return (
     <Sheet
@@ -491,7 +501,7 @@ export function TextPanel({ design, scene }: PanelProps) {
         <ButtonRow accent icon={<Icon name="pin" />} label={t('text.addOwn')} onClick={() => setEditorUI({ placeMode: true, selectedCustomId: null })} />
       </Group>
 
-      <AddLabelsSheet open={adding} onClose={() => setAdding(false)} bands={design.bands} />
+      <AddLabelsSheet open={adding} onClose={() => setAdding(false)} bands={[...design.bands, ...centreRings(design)]} />
       <ActionSheet
         open={!!deletingSet}
         onClose={() => setDeletingSet(null)}

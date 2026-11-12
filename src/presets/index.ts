@@ -1,7 +1,10 @@
 /**
  * Starting designs. Geometry values are documented in docs/MATH.md.
  */
-import type { Band, BhupuraBand, CircleBand, CircleFigure, Design, BeadBand, GridFigure, LotusBand, PolygonFigure, SriFigure, TextRingBand } from '../core/types';
+import type {
+  Band, BhupuraBand, CircleBand, CircleFigure, CustomLabel, Design, BeadBand, GridFigure, LabelSet, LatticeFigure, LotusBand, LotusFigure,
+  PolygonFigure, RaysFigure, SriFigure, TextRingBand,
+} from '../core/types';
 import { createLabelSet, toDevanagariNumber } from '../text';
 
 let counter = 0;
@@ -44,6 +47,47 @@ export const gridFigure = (id: string, rows: number, cols: number, numbers: (num
   id, type: 'grid', visible: true, rows, cols, size: 1.2, textSizeMm: 16, lineMm: 0.5,
   texts: numbers.map((v) => (typeof v === 'number' ? toDevanagariNumber(v) : v)), ...p,
 });
+
+export const lotusFigure = (id: string, petals: number, radius: number, p: Partial<LotusFigure> = {}): LotusFigure => ({
+  id, type: 'lotus', visible: true, radius, petals, height: 0.2, shape: 'classic', fullness: 0.6, tip: 0.6, tipAtTop: true, lineMm: 0.5, fill: null, ...p,
+});
+export const raysFigure = (id: string, count: number, p: Partial<RaysFigure> = {}): RaysFigure => ({
+  id, type: 'rays', visible: true, count, inner: 0, outer: 1, rotationDeg: 0, lineMm: 0.5, ...p,
+});
+export const latticeFigure = (id: string, rows: number, p: Partial<LatticeFigure> = {}): LatticeFigure => ({
+  id, type: 'lattice', visible: true, rows, hollow: 0, radius: 1, rotationDeg: 0, lineMm: 0.5, ...p,
+});
+
+/** A ready-filled label set on any group of places. */
+export function labelsOn(group: string, name: string, texts: string[], p: Partial<LabelSet> = {}): LabelSet {
+  return { ...createLabelSet('blank', group), name, texts, ...p };
+}
+/** A single piece of text at a point (scene units; the centre is 0, 0). */
+export const textAt = (text: string, sizeMm: number, x = 0, y = 0, angleDeg = 0): CustomLabel => ({ id: newId('t'), text, x, y, sizeMm, angleDeg });
+const words = (line: string) => line.split(/\s+/).filter(Boolean);
+const noBindu = { visible: false, radius: 0.014, style: 'dot' as const };
+
+/** One of the body's lotuses: a ring of lettered petals around a circle that holds its figure and seed syllable. */
+function chakraDesign(name: string, petals: number, letters: string, bija: string, centre: Design['centre'], o: { tipAtTop?: boolean; height?: number; bijaAt?: [number, number]; bijaMm?: number; letterMm?: number } = {}): Design {
+  return createDesign({
+    name,
+    sizeMm: 300,
+    centre,
+    bindu: noBindu,
+    bands: [circleBand('c0', { count: 2, spacing: 0.03 }), lotusBand('l', petals, { height: o.height ?? 0.42, fullness: 0.85, tip: 0.5, tipAtTop: o.tipAtTop ?? true })],
+    text: {
+      visible: true,
+      font: 'tiro',
+      color: null,
+      sets: [labelsOn('band:l', 'Petal letters', words(letters), { sizeMm: o.letterMm ?? 9 })],
+      custom: [textAt(bija, o.bijaMm ?? 26, o.bijaAt?.[0] ?? 0, o.bijaAt?.[1] ?? 0)],
+    },
+  });
+}
+
+/** Every planet's square is the Sun's square with the same number added to each cell. */
+const SURYA = [6, 1, 8, 7, 5, 3, 2, 9, 4];
+const graha = (add: number) => SURYA.map((v) => v + add);
 
 /** A simple enclosure for most yantras: circle, 8 petals, circle, bhupura. */
 export function simpleBands(lineMm = 0.5): Band[] {
@@ -116,7 +160,7 @@ export function createDesign(p: Partial<Design> = {}): Design {
   };
 }
 
-export type PresetCategory = 'forms' | 'numbers' | 'sri';
+export type PresetCategory = 'forms' | 'mahavidya' | 'chakras' | 'numbers' | 'sri';
 
 export interface Preset {
   id: string;
@@ -140,7 +184,7 @@ export const PRESETS: Preset[] = [
   },
   {
     id: 'trikona',
-    category: 'forms',
+    category: 'mahavidya',
     name: 'Triangle in Lotus',
     nameHi: 'कमल में त्रिकोण',
     blurb: 'One downward triangle in an eight-petalled lotus. Often drawn for Tara.',
@@ -172,7 +216,7 @@ export const PRESETS: Preset[] = [
   },
   {
     id: 'kali',
-    category: 'forms',
+    category: 'mahavidya',
     name: 'Five Triangles',
     nameHi: 'पञ्च त्रिकोण',
     blurb: 'Five downward triangles one inside another. Often drawn for Kali.',
@@ -186,7 +230,7 @@ export const PRESETS: Preset[] = [
   },
   {
     id: 'bhuvaneshwari',
-    category: 'forms',
+    category: 'mahavidya',
     name: 'Star with Two Lotuses',
     nameHi: 'षट्कोण, दो कमल',
     blurb: 'Six-pointed star with eight and sixteen petals. Often drawn for Bhuvaneshvari.',
@@ -273,6 +317,344 @@ export const PRESETS: Preset[] = [
       }),
   },
   {
+    id: 'murugan',
+    category: 'forms',
+    name: 'Star with Six Letters',
+    nameHi: 'षडक्षर षट्कोण',
+    blurb: 'Six-pointed star with Om at the heart and a syllable in each point, as drawn for Murugan (Shanmukha).',
+    blurbHi: 'षट्कोण, मध्य में ॐ और प्रत्येक कोण में एक अक्षर — षण्मुख (मुरुगन) यन्त्र का रूप।',
+    make: () =>
+      createDesign({
+        name: 'Shanmukha Yantra',
+        centre: [polygonFigure('p1', 6, { step: 2, radius: 0.96 })],
+        bindu: noBindu,
+        bands: [circleBand('c0'), lotusBand('l6', 6, { height: 0.3, fullness: 0.8 }), circleBand('c1'), bhupuraBand('bhu')],
+        text: {
+          visible: true, font: 'tiro', color: null, sets: [],
+          custom: [
+            textAt('ॐ', 24),
+            ...words('श र व ण भ व').map((ch, i) => {
+              const a = ((-90 + i * 60) * Math.PI) / 180;
+              return textAt(ch, 11, 0.7 * Math.cos(a), 0.7 * Math.sin(a));
+            }),
+          ],
+        },
+      }),
+  },
+  {
+    id: 'surya12',
+    category: 'forms',
+    name: 'Sun of Twelve Rays',
+    nameHi: 'द्वादश किरण सूर्य',
+    blurb: 'A disc ringed by twelve triangles. Shows a figure repeated around the centre.',
+    blurbHi: 'बारह त्रिकोणों से घिरा मण्डल। एक आकृति को केन्द्र के चारों ओर दोहराने का उदाहरण।',
+    make: () =>
+      createDesign({
+        name: 'Twelve-Ray Sun',
+        centre: [circleFigure('c', 0.5, { count: 2, spacing: 0.03 }), polygonFigure('rays', 3, { radius: 0.2, orbit: { count: 12, radius: 0.76, phaseDeg: 0 } })],
+        bands: [circleBand('c0'), bhupuraBand('bhu')],
+      }),
+  },
+  {
+    id: 'dvadasha',
+    category: 'forms',
+    name: 'Twelve-Pointed Star',
+    nameHi: 'द्वादश कोण',
+    blurb: 'Four interlocked triangles with a twelve-petalled lotus.',
+    blurbHi: 'चार परस्पर गुँथे त्रिकोण, द्वादश दल कमल सहित।',
+    make: () =>
+      createDesign({
+        name: 'Twelve-Pointed Star Yantra',
+        centre: [polygonFigure('p1', 12, { step: 4 }), circleFigure('ci', 0.24)],
+        bands: [circleBand('c0'), lotusBand('l12', 12, { height: 0.24 }), circleBand('c1', { count: 2, spacing: 0.035 }), bhupuraBand('bhu')],
+      }),
+  },
+  {
+    id: 'shodasha',
+    category: 'forms',
+    name: 'Sixteen-Pointed Star',
+    nameHi: 'षोडश कोण',
+    blurb: 'Two eight-pointed stars woven together, a small lotus at the heart, beads and sixteen petals outside.',
+    blurbHi: 'दो अष्टकोण तारे गुँथे हुए, मध्य में छोटा कमल, बाहर मणि-वलय और षोडश दल।',
+    make: () =>
+      createDesign({
+        name: 'Sixteen-Pointed Star Yantra',
+        sizeMm: 420,
+        centre: [polygonFigure('p1', 16, { step: 6, lines: 2, lineGapMm: 1.6 }), circleFigure('ci', 0.2), lotusFigure('li', 8, 0.06, { height: 0.13, fullness: 0.8 })],
+        bands: [circleBand('c0', { count: 2, spacing: 0.03 }), beadBand('b1', 64), circleBand('c1', { gap: 0.012 }), lotusBand('l16', 16, { height: 0.22, insets: 1 }), circleBand('c2', { count: 3, spacing: 0.035 }), bhupuraBand('bhu')],
+      }),
+  },
+  {
+    id: 'bhairavi',
+    category: 'mahavidya',
+    name: 'Downward Triangle in Star',
+    nameHi: 'षट्कोण में अधोमुख त्रिकोण',
+    blurb: 'A downward triangle inside a six-pointed star. One common form for Bhairavi.',
+    blurbHi: 'षट्कोण के भीतर अधोमुख त्रिकोण — भैरवी यन्त्र का एक प्रचलित रूप।',
+    make: () =>
+      createDesign({
+        name: 'Bhairavi Yantra',
+        centre: [polygonFigure('p1', 6, { step: 2 }), polygonFigure('p2', 3, { radius: 0.36, rotationDeg: 180 })],
+        bands: simpleBands(),
+        style: { ...PAPERS.vermilion },
+      }),
+  },
+  {
+    id: 'chinnamasta',
+    category: 'mahavidya',
+    name: 'Triangle within Triangle',
+    nameHi: 'त्रिकोण में त्रिकोण',
+    blurb: 'Two downward triangles, three circles and eight petals. One common form for Chinnamasta.',
+    blurbHi: 'दो अधोमुख त्रिकोण, तीन वृत्त और अष्टदल — छिन्नमस्ता यन्त्र का एक प्रचलित रूप।',
+    make: () =>
+      createDesign({
+        name: 'Chinnamasta Yantra',
+        centre: [polygonFigure('p1', 3, { rotationDeg: 180, nest: 2, nestRatio: 0.5 })],
+        bands: [circleBand('c0', { count: 3, spacing: 0.035 }), lotusBand('l8', 8, { height: 0.26 }), circleBand('c1'), bhupuraBand('bhu')],
+      }),
+  },
+  {
+    id: 'dhumavati',
+    category: 'mahavidya',
+    name: 'Star in Lotus, Smoke',
+    nameHi: 'धूम्र षट्कोण',
+    blurb: 'Six-pointed star in eight petals on a smoke-grey ground. One common form for Dhumavati.',
+    blurbHi: 'धूम्र वर्ण पर अष्टदल में षट्कोण — धूमावती यन्त्र का एक प्रचलित रूप।',
+    make: () =>
+      createDesign({
+        name: 'Dhumavati Yantra',
+        centre: [polygonFigure('p1', 6, { step: 2 }), circleFigure('ci', 0.2)],
+        bands: simpleBands(),
+        style: { ink: '#1f1f22', paper: '#c9c9cc' },
+      }),
+  },
+  {
+    id: 'bagalamukhi',
+    category: 'mahavidya',
+    name: 'Triangle in Star, Two Lotuses',
+    nameHi: 'त्रिकोण, षट्कोण, दो कमल',
+    blurb: 'Triangle in a six-pointed star with eight and sixteen petals, on yellow. One common form for Bagalamukhi.',
+    blurbHi: 'पीत वर्ण पर त्रिकोण, षट्कोण, अष्टदल और षोडशदल — बगलामुखी यन्त्र का एक प्रचलित रूप।',
+    make: () =>
+      createDesign({
+        name: 'Bagalamukhi Yantra',
+        centre: [polygonFigure('p1', 6, { step: 2 }), polygonFigure('p2', 3, { radius: 0.36, rotationDeg: 180 })],
+        bands: standardBands(),
+        style: { ink: '#3a2a00', paper: '#f2cf3f' },
+      }),
+  },
+  {
+    id: 'matangi',
+    category: 'mahavidya',
+    name: 'Triangle with Two Lotuses',
+    nameHi: 'त्रिकोण, दो कमल',
+    blurb: 'A downward triangle with eight and sixteen petals. One common form for Matangi.',
+    blurbHi: 'अधोमुख त्रिकोण, अष्टदल और षोडशदल — मातङ्गी यन्त्र का एक प्रचलित रूप।',
+    make: () =>
+      createDesign({
+        name: 'Matangi Yantra',
+        centre: [polygonFigure('p1', 3, { rotationDeg: 180 }), circleFigure('ci', 0.46)],
+        bands: standardBands(),
+      }),
+  },
+  {
+    id: 'kamala',
+    category: 'mahavidya',
+    name: 'Star in Full Lotus, Gold',
+    nameHi: 'स्वर्ण कमल में षट्कोण',
+    blurb: 'Six-pointed star in a full eight-petalled lotus with three circles, on gold. One common form for Kamala.',
+    blurbHi: 'स्वर्ण वर्ण पर पूर्ण अष्टदल कमल में षट्कोण, तीन वृत्त — कमला यन्त्र का एक प्रचलित रूप।',
+    make: () =>
+      createDesign({
+        name: 'Kamala Yantra',
+        centre: [polygonFigure('p1', 6, { step: 2 })],
+        bands: [circleBand('c0'), lotusBand('l8', 8, { height: 0.3, shape: 'lotus', fullness: 0.85 }), circleBand('c1', { count: 3, spacing: 0.04 }), bhupuraBand('bhu')],
+        style: { ...PAPERS.gold },
+      }),
+  },
+  {
+    id: 'muladhara',
+    category: 'chakras',
+    name: 'Muladhara · 4 petals',
+    nameHi: 'मूलाधार · ४ दल',
+    blurb: 'Square and downward triangle in a four-petalled lotus, seed syllable Lam.',
+    blurbHi: 'चतुर्दल कमल में चतुरस्र और अधोमुख त्रिकोण, बीज लं।',
+    make: () =>
+      chakraDesign('Muladhara', 4, 'वं शं षं सं', 'लं', [polygonFigure('sq', 4, { rotationDeg: 45, radius: 0.94 }), polygonFigure('tri', 3, { rotationDeg: 180, radius: 0.56 })], { tipAtTop: false, height: 0.5, bijaMm: 22 }),
+  },
+  {
+    id: 'svadhisthana',
+    category: 'chakras',
+    name: 'Svadhisthana · 6 petals',
+    nameHi: 'स्वाधिष्ठान · ६ दल',
+    blurb: 'A crescent made by two circles in a six-petalled lotus, seed syllable Vam.',
+    blurbHi: 'षड्दल कमल में दो वृत्तों से बना अर्धचन्द्र, बीज वं।',
+    make: () =>
+      chakraDesign('Svadhisthana', 6, 'बं भं मं यं रं लं', 'वं', [circleFigure('moon', 0.78, { orbit: { count: 1, radius: 0.2, phaseDeg: 0 } })], { bijaAt: [0, -0.2] }),
+  },
+  {
+    id: 'manipura',
+    category: 'chakras',
+    name: 'Manipura · 10 petals',
+    nameHi: 'मणिपूर · १० दल',
+    blurb: 'A downward triangle in a ten-petalled lotus, seed syllable Ram.',
+    blurbHi: 'दशदल कमल में अधोमुख त्रिकोण, बीज रं।',
+    make: () => chakraDesign('Manipura', 10, 'डं ढं णं तं थं दं धं नं पं फं', 'रं', [polygonFigure('tri', 3, { rotationDeg: 180, radius: 0.96 })], { height: 0.36 }),
+  },
+  {
+    id: 'anahata',
+    category: 'chakras',
+    name: 'Anahata · 12 petals',
+    nameHi: 'अनाहत · १२ दल',
+    blurb: 'A six-pointed star in a twelve-petalled lotus, seed syllable Yam.',
+    blurbHi: 'द्वादशदल कमल में षट्कोण, बीज यं।',
+    make: () => chakraDesign('Anahata', 12, 'कं खं गं घं ङं चं छं जं झं ञं टं ठं', 'यं', [polygonFigure('star', 6, { step: 2, radius: 0.96 })], { height: 0.34, letterMm: 8 }),
+  },
+  {
+    id: 'vishuddha',
+    category: 'chakras',
+    name: 'Vishuddha · 16 petals',
+    nameHi: 'विशुद्ध · १६ दल',
+    blurb: 'A circle within a downward triangle in a sixteen-petalled lotus that carries the sixteen vowels, seed syllable Ham.',
+    blurbHi: 'षोडशदल कमल (सोलह स्वर) में अधोमुख त्रिकोण और वृत्त, बीज हं।',
+    make: () =>
+      chakraDesign('Vishuddha', 16, 'अं आं इं ईं उं ऊं ऋं ॠं ऌं ॡं एं ऐं ओं औं अं अः', 'हं', [polygonFigure('tri', 3, { rotationDeg: 180, radius: 0.96 }), circleFigure('ci', 0.44)], { height: 0.32, letterMm: 7, bijaMm: 22 }),
+  },
+  {
+    id: 'ajna',
+    category: 'chakras',
+    name: 'Ajna · 2 petals',
+    nameHi: 'आज्ञा · २ दल',
+    blurb: 'A downward triangle between two petals, seed syllable Om.',
+    blurbHi: 'दो दलों के बीच अधोमुख त्रिकोण, बीज ॐ।',
+    make: () => chakraDesign('Ajna', 2, 'हं क्षं', 'ॐ', [polygonFigure('tri', 3, { rotationDeg: 180, radius: 0.9 })], { tipAtTop: false, height: 0.8, letterMm: 16 }),
+  },
+  {
+    id: 'sahasrara',
+    category: 'chakras',
+    name: 'Sahasrara · 1000 petals',
+    nameHi: 'सहस्रार · १००० दल',
+    blurb: 'The thousand-petalled lotus: twenty rings of fifty petals. The heaviest design here.',
+    blurbHi: 'सहस्रदल कमल: पचास-पचास दलों के बीस वलय। यहाँ की सबसे भारी रचना।',
+    make: () =>
+      createDesign({
+        name: 'Sahasrara',
+        sizeMm: 600,
+        centre: [circleFigure('ci', 0.5, { lineMm: 0.3 })],
+        bindu: { visible: true, radius: 0.03, style: 'ringdot' },
+        triangles: { visible: true, lineMm: 0.3, lines: 1, lineGapMm: 1.2 },
+        bands: [
+          circleBand('c0', { lineMm: 0.3 }),
+          ...Array.from({ length: 20 }, (_, i) => lotusBand(`s${i}`, 50, { lineMm: 0.3, height: 0.1, fullness: 0.7, tip: 0.5, tipAtTop: i % 2 === 0 })),
+        ],
+      }),
+  },
+  {
+    id: 'navagraha',
+    category: 'numbers',
+    name: 'Nine Planets',
+    nameHi: 'नवग्रह यन्त्र',
+    blurb: 'Nine three-by-three squares, the Sun in the middle. Each planet adds one more to every cell: totals 15 to 39.',
+    blurbHi: 'नौ ग्रहों के नौ यन्त्र, मध्य में सूर्य। प्रत्येक ग्रह के अंक एक-एक बढ़ते हैं: योग १५ से ३९।',
+    make: () => {
+      // Budha Shukra Chandra / Guru Surya Mangal / Ketu Shani Rahu
+      const add = [[3, 5, 1], [4, 0, 2], [8, 6, 7]];
+      const cells: number[] = [];
+      for (let r = 0; r < 9; r++) for (let c = 0; c < 9; c++) cells.push(graha(add[Math.floor(r / 3)][Math.floor(c / 3)])[(r % 3) * 3 + (c % 3)]);
+      return createDesign({
+        name: 'Navagraha Yantra',
+        sizeMm: 300,
+        centre: [gridFigure('g1', 9, 9, cells, { size: 1.9, textSizeMm: 9, blocks: 3 })],
+        bindu: noBindu,
+        bands: [],
+        style: { ...PAPERS.copper },
+      });
+    },
+  },
+  {
+    id: 'mangala21',
+    category: 'numbers',
+    name: 'Triangle of Twenty-One',
+    nameHi: 'इक्कीस त्रिकोण',
+    blurb: 'A triangle cut into twenty-one small triangles around a central one, as on old Mangala (Mars) yantras.',
+    blurbHi: 'एक केन्द्रीय त्रिकोण के चारों ओर इक्कीस छोटे त्रिकोण — प्राचीन मङ्गल यन्त्रों जैसा।',
+    make: () =>
+      createDesign({
+        name: 'Mangala Yantra',
+        centre: [latticeFigure('lat', 5, { hollow: 2, radius: 1.15 })],
+        bindu: noBindu,
+        bands: [],
+        text: { visible: true, font: 'tiro', color: null, sets: [], custom: [textAt('ॐ', 20)] },
+        style: { ...PAPERS.vermilion },
+      }),
+  },
+  {
+    id: 'rashi',
+    category: 'numbers',
+    name: 'Wheel of Signs and Stars',
+    nameHi: 'राशि-नक्षत्र चक्र',
+    blurb: 'Twelve signs inside, twenty-seven lunar mansions outside, each name in its own sector.',
+    blurbHi: 'भीतर बारह राशियाँ, बाहर सत्ताईस नक्षत्र — प्रत्येक नाम अपने खण्ड में।',
+    make: () =>
+      createDesign({
+        name: 'Rashi Nakshatra Chakra',
+        sizeMm: 420,
+        centre: [
+          circleFigure('hub', 0.3),
+          raysFigure('rashi', 12, { inner: 0.3, outer: 1 }),
+          circleFigure('mid', 1),
+          raysFigure('nak', 27, { inner: 1, outer: 1.5 }),
+          circleFigure('rim', 1.5, { count: 2, spacing: 0.04 }),
+        ],
+        bindu: noBindu,
+        bands: [],
+        text: {
+          visible: true, font: 'tiro', color: null, custom: [textAt('ॐ', 22)],
+          sets: [
+            labelsOn('band:rashi', 'Twelve signs', words('मेष वृषभ मिथुन कर्क सिंह कन्या तुला वृश्चिक धनु मकर कुम्भ मीन'), { sizeMm: 9, orient: 'tangent' }),
+            labelsOn('band:nak', 'Twenty-seven stars', words('अश्विनी भरणी कृत्तिका रोहिणी मृगशिरा आर्द्रा पुनर्वसु पुष्य आश्लेषा मघा पूर्वाफाल्गुनी उत्तराफाल्गुनी हस्त चित्रा स्वाती विशाखा अनुराधा ज्येष्ठा मूल पूर्वाषाढा उत्तराषाढा श्रवण धनिष्ठा शतभिषा पूर्वाभाद्रपदा उत्तराभाद्रपदा रेवती'), { sizeMm: 6, orient: 'radial', angleDeg: -90, fit: false }),
+          ],
+        },
+      }),
+  },
+  {
+    id: 'kundali',
+    category: 'numbers',
+    name: 'Twelve Houses',
+    nameHi: 'कुण्डली (द्वादश भाव)',
+    blurb: 'The northern birth-chart frame: a square, its diagonals and a diamond make twelve houses.',
+    blurbHi: 'उत्तर भारतीय कुण्डली: चतुरस्र, उसके कर्ण और एक समचतुर्भुज से बारह भाव।',
+    make: () => {
+      const h = Math.SQRT1_2;
+      const at: [number, number][] = [[0, -0.5], [-0.5, -0.8], [-0.8, -0.5], [-0.5, 0], [-0.8, 0.5], [-0.5, 0.8], [0, 0.5], [0.5, 0.8], [0.8, 0.5], [0.5, 0], [0.8, -0.5], [0.5, -0.8]];
+      return createDesign({
+        name: 'Kundali',
+        sizeMm: 200,
+        centre: [polygonFigure('sq', 4, { rotationDeg: 45, radius: 1 }), polygonFigure('dia', 4, { radius: h }), polygonFigure('x', 4, { step: 2, rotationDeg: 45, radius: 1 })],
+        bindu: noBindu,
+        bands: [],
+        text: { visible: true, font: 'noto-sans', color: null, sets: [], custom: at.map(([x, y], i) => textAt(toDevanagariNumber(i + 1), 7, x * h, y * h)) },
+        style: { ...PAPERS.white },
+      });
+    },
+  },
+  {
+    id: 'vastu',
+    category: 'numbers',
+    name: 'Eighty-One Squares',
+    nameHi: 'इक्यासी पद मण्डल',
+    blurb: 'The nine-by-nine ground plan of the Vastu mandala, empty for you to fill, Brahma at the centre.',
+    blurbHi: 'वास्तु मण्डल का नौ-गुणा-नौ पद विन्यास, भरने के लिए रिक्त, मध्य में ब्रह्मा।',
+    make: () =>
+      createDesign({
+        name: 'Vastu Mandala',
+        sizeMm: 300,
+        centre: [gridFigure('g1', 9, 9, Array.from({ length: 81 }, (_, i) => (i === 40 ? 'ब्रह्मा' : '')), { size: 1.9, textSizeMm: 6, blocks: 3 })],
+        bindu: noBindu,
+        bands: [],
+      }),
+  },
+  {
     id: 'classical',
     category: 'sri',
     name: 'Classical',
@@ -300,7 +682,7 @@ export const PRESETS: Preset[] = [
     make: () => createDesign({ name: 'Saundaryalahari Sri Yantra', geometry: { ...GEOMETRIES.lakshmidhara } }),
   },
   {
-    id: 'navagraha',
+    id: 'ratios',
     category: 'sri',
     name: 'Simple Ratios',
     nameHi: 'सरल अनुपात',
