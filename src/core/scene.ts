@@ -6,6 +6,7 @@ import { buildFigure, bottomAnticlockwiseKey, type Figure, type Pt } from './arr
 import { gridLayout, latticeLines, orbitPlacements, polygonLoops, raySegments } from './figures';
 import { polygon } from './path';
 import { arrange, type Seg } from './planar';
+import { arcPath, crescentPath, freeLoops, symbolPath, validMerges } from './shapes';
 import { solveGeometry, TRI, TRI_NAMES, TRI_SANSKRIT, TRI_UP, type Solved } from './solver';
 import type { Anchor, CentreFigure, Design, GeometryReport, LotusBand, PathCmd, Prim, Scene, TriangleInfo } from './types';
 import { buildBands } from '../outer';
@@ -98,7 +99,7 @@ export function buildScene(design: Design, shaper?: Shaper): Scene {
   const anyFill =
     design.cells.filled ||
     design.bands.some((b) => b.visible && 'fill' in b && b.fill) ||
-    centre.some((f) => f.type === 'polygon' && f.fill);
+    centre.some((f) => (f.type === 'polygon' || f.type === 'crescent' || f.type === 'free' || f.type === 'lotus') && f.fill);
 
   const solved = sriSpec ? solveGeometry(design.geometry) : null;
   const unitFig = solved ? buildFigure(solved, design.geometry.flip) : null;
@@ -107,12 +108,15 @@ export function buildScene(design: Design, shaper?: Shaper): Scene {
   const outer = buildBands(design.bands, 1, { ink, paper, filled: anyFill });
   let extent = Math.max(1.02, outer.extent);
   for (const f of centre) {
-    const orbitR = (f.type === 'polygon' || f.type === 'circle') && f.orbit && f.orbit.count >= 1 ? Math.max(0, f.orbit.radius) : 0;
+    const orbitR = 'orbit' in f && f.orbit && f.orbit.count >= 1 ? Math.max(0, f.orbit.radius) : 0;
     if (f.type === 'polygon' || f.type === 'sri') extent = Math.max(extent, orbitR + f.radius * 1.01);
     else if (f.type === 'circle') extent = Math.max(extent, orbitR + f.radius + Math.max(0, f.count - 1) * f.spacing);
     else if (f.type === 'lotus') extent = Math.max(extent, (f.radius + f.height) * 1.02);
     else if (f.type === 'rays') extent = Math.max(extent, f.outer);
     else if (f.type === 'lattice') extent = Math.max(extent, f.radius * 1.01);
+    else if (f.type === 'arc' || f.type === 'crescent') extent = Math.max(extent, orbitR + f.radius * 1.01);
+    else if (f.type === 'symbol') extent = Math.max(extent, orbitR + f.size * 1.45);
+    else if (f.type === 'free') for (const q of f.points ?? []) extent = Math.max(extent, Math.hypot(q.x, q.y) * 1.01);
     else if (f.type === 'grid') { const g = gridLayout(f); extent = Math.max(extent, Math.hypot(g.width, g.height) / 2); }
   }
   const unitMm = design.sizeMm / (2 * extent);
@@ -193,11 +197,42 @@ export function buildScene(design: Design, shaper?: Shaper): Scene {
         segs.push({ a: p0, b: p1 });
       }
       prims.push({ kind: 'path', d, layer: `fig:${f.id}`, role: 'lattice', paint: { stroke: ink, strokeMm: f.lineMm, fill: null } });
+    } else if (f.type === 'arc') {
+      for (const pl of orbitPlacements(f.orbit))
+        prims.push({ kind: 'path', d: arcPath(f, pl), layer: `fig:${f.id}`, role: 'arc', paint: { stroke: ink, strokeMm: f.lineMm, fill: null } });
+    } else if (f.type === 'crescent') {
+      for (const pl of orbitPlacements(f.orbit))
+        prims.push({ kind: 'path', d: crescentPath(f, pl), layer: `fig:${f.id}`, role: 'crescent', paint: { stroke: ink, strokeMm: f.lineMm, fill: anyFill ? f.fill : null } });
+    } else if (f.type === 'symbol') {
+      for (const pl of orbitPlacements(f.orbit))
+        prims.push({ kind: 'path', d: symbolPath(f, pl), layer: `fig:${f.id}`, role: `symbol:${f.symbol}`, paint: { stroke: ink, strokeMm: f.lineMm, fill: null } });
+    } else if (f.type === 'free') {
+      freeLoops(f).forEach((loop, li) => {
+        const closed = f.closed && loop.length >= 3;
+        const d: PathCmd[] = closed ? polygon(loop) : loop.map((q, i) => [i === 0 ? 'M' : 'L', q.x, q.y] as PathCmd);
+        if (closed && anyFill && f.fill) prims.push({ kind: 'path', d, layer: `fig:${f.id}`, role: 'fill', paint: { stroke: null, strokeMm: 0, fill: f.fill } });
+        prims.push({ kind: 'path', d, layer: `fig:${f.id}`, role: `free:${li}`, paint: { stroke: ink, strokeMm: f.lineMm, fill: null } });
+        for (let i = 0; i + 1 < loop.length; i++) segs.push({ a: loop[i], b: loop[i + 1] });
+        if (closed) segs.push({ a: loop[loop.length - 1], b: loop[0] });
+      });
     } else if (f.type === 'grid') {
       const g = gridLayout(f);
+      const merges = validMerges(f.merges, g.rows, g.cols);
+      const inBlock = (r: number, c: number) => merges.find((m) => r >= m.row && r < m.row + m.rows && c >= m.col && c < m.col + m.cols);
       const d: PathCmd[] = [];
-      for (let c = 0; c <= g.cols; c++) d.push(['M', g.x0 + c * g.cell, g.y0], ['L', g.x0 + c * g.cell, g.y0 + g.height]);
-      for (let r = 0; r <= g.rows; r++) d.push(['M', g.x0, g.y0 + r * g.cell], ['L', g.x0 + g.width, g.y0 + r * g.cell]);
+      // each grid line is drawn piece by piece, leaving out the pieces inside a joined block
+      for (let c = 0; c <= g.cols; c++)
+        for (let r = 0; r < g.rows; r++) {
+          const left = c > 0 ? inBlock(r, c - 1) : undefined;
+          if (left && c < g.cols && left === inBlock(r, c)) continue;
+          d.push(['M', g.x0 + c * g.cell, g.y0 + r * g.cell], ['L', g.x0 + c * g.cell, g.y0 + (r + 1) * g.cell]);
+        }
+      for (let r = 0; r <= g.rows; r++)
+        for (let c = 0; c < g.cols; c++) {
+          const above = r > 0 ? inBlock(r - 1, c) : undefined;
+          if (above && r < g.rows && above === inBlock(r, c)) continue;
+          d.push(['M', g.x0 + c * g.cell, g.y0 + r * g.cell], ['L', g.x0 + (c + 1) * g.cell, g.y0 + r * g.cell]);
+        }
       prims.push({ kind: 'path', d, layer: `fig:${f.id}`, role: 'grid', paint: { stroke: ink, strokeMm: f.lineMm, fill: null } });
       const blocks = Math.round(f.blocks ?? 0);
       if (blocks > 1) {
@@ -208,13 +243,16 @@ export function buildScene(design: Design, shaper?: Shaper): Scene {
       }
       for (let r = 0; r < g.rows; r++)
         for (let c = 0; c < g.cols; c++) {
+          const block = inBlock(r, c);
+          if (block && (block.row !== r || block.col !== c)) continue; // a joined block shows only its first cell's text
           const text = (f.texts[r * g.cols + c] ?? '').trim();
           if (!text) continue;
+          const spanC = block ? block.cols : 1, spanR = block ? block.rows : 1;
           const glyphs = Math.max(1, [...text].length);
-          const size = Math.min(mm(f.textSizeMm), (g.cell * 0.8) / Math.max(1.1, glyphs * 0.62));
+          const size = Math.min(mm(f.textSizeMm) * (block ? Math.min(spanC, spanR) : 1), (g.cell * spanC * 0.8) / Math.max(1.1, glyphs * 0.62), g.cell * spanR * 0.7);
           gridText.push({
             kind: 'text', layer: 'text', id: `grid:${f.id}:${r}:${c}`, text,
-            x: g.x0 + (c + 0.5) * g.cell, y: g.y0 + (r + 0.5) * g.cell, size, angle: 0,
+            x: g.x0 + (c + spanC / 2) * g.cell, y: g.y0 + (r + spanR / 2) * g.cell, size, angle: 0,
             font: design.text.font, fill: design.text.color ?? ink,
           });
         }

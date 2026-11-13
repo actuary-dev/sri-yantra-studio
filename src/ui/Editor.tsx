@@ -135,6 +135,7 @@ export function Editor() {
   const wide = useMediaQuery('(min-width: 900px)');
   const panel = useEditorUI((s) => s.panel);
   const placeMode = useEditorUI((s) => s.placeMode);
+  const drawId = useEditorUI((s) => s.drawFigureId);
   const pending = useEditorUI((s) => s.pending);
   const selectedId = useEditorUI((s) => s.selectedCustomId);
   const exportOpen = useEditorUI((s) => s.exportOpen);
@@ -155,7 +156,7 @@ export function Editor() {
   const invalid = !!built.scene && !built.scene.report.ok;
 
   const activePanel: PanelId | null = wide ? panel ?? 'shape' : panel;
-  const sheetOpen = !wide && panel !== null && !placeMode && !pending;
+  const sheetOpen = !wide && panel !== null && !placeMode && !pending && !drawId;
 
   // warm up the export module in the background
   useEffect(() => {
@@ -163,7 +164,7 @@ export function Editor() {
     return () => clearTimeout(id);
   }, []);
 
-  useEffect(() => () => setEditorUI({ panel: null, placeMode: false, pending: null, selectedCustomId: null, exportOpen: false, helpOpen: false }), []);
+  useEffect(() => () => setEditorUI({ panel: null, placeMode: false, pending: null, selectedCustomId: null, drawFigureId: null, exportOpen: false, helpOpen: false }), []);
 
   // keyboard shortcuts: undo / redo
   useEffect(() => {
@@ -209,6 +210,21 @@ export function Editor() {
   const onTap = useCallback(
     (x: number, y: number, s: number) => {
       const ui = editorUI.getState();
+      if (ui.drawFigureId) {
+        // drawing a free shape: each tap adds a point, joining to a nearby corner or crossing when there is one
+        let near: { x: number; y: number; d: number } | null = null;
+        for (const a of anchors) {
+          const d = Math.hypot(a.x - x, a.y - y);
+          if (!near || d < near.d) near = { x: a.x, y: a.y, d };
+        }
+        const pt = near && near.d <= 20 / s ? { x: near.x, y: near.y } : { x, y };
+        const fid = ui.drawFigureId;
+        studio.getState().update((d) => {
+          const f = (d.centre ?? []).find((q) => q.id === fid);
+          if (f && f.type === 'free') f.points.push(pt);
+        });
+        return;
+      }
       if (ui.placeMode) {
         let best: { a: (typeof anchors)[number]; d: number } | null = null;
         for (const a of anchors) {
@@ -254,13 +270,18 @@ export function Editor() {
   }, []);
 
   const selected = selectedId ? design.text.custom.find((c) => c.id === selectedId) : undefined;
+  const drawFig = drawId ? (design.centre ?? []).find((f) => f.id === drawId) : undefined;
+  const drawPoints = useMemo(() => (drawFig && drawFig.type === 'free' ? drawFig.points : []), [drawFig]);
   const overlay = useCallback(
     (s: number) => (
       <g className="overlay">
-        {placeMode &&
+        {(placeMode || drawId) &&
           anchors.map((a) => (
-            <circle key={a.id} cx={a.x} cy={a.y} r={5 / s} fill="var(--accent)" stroke="#fff" strokeWidth={1.5 / s} opacity={0.9} />
+            <circle key={a.id} cx={a.x} cy={a.y} r={(drawId ? 3.5 : 5) / s} fill="var(--accent)" stroke="#fff" strokeWidth={1.5 / s} opacity={drawId ? 0.55 : 0.9} />
           ))}
+        {drawPoints.map((q, i) => (
+          <circle key={`dp${i}`} cx={q.x} cy={q.y} r={6 / s} fill="#fff" stroke="var(--accent)" strokeWidth={2.5 / s} />
+        ))}
         {selected && (
           <circle
             cx={selected.x}
@@ -274,7 +295,7 @@ export function Editor() {
         )}
       </g>
     ),
-    [placeMode, anchors, selected, unitMm],
+    [placeMode, drawId, drawPoints, anchors, selected, unitMm],
   );
 
   const toggleText = () => {
@@ -286,7 +307,7 @@ export function Editor() {
   };
 
   const onTab = (id: PanelId) => {
-    setEditorUI({ panel: panel === id ? null : id, placeMode: false });
+    setEditorUI({ panel: panel === id ? null : id, placeMode: false, drawFigureId: null });
   };
 
   return (
@@ -357,12 +378,34 @@ export function Editor() {
           </div>
         )}
 
-        {(invalid || placeMode) && (
+        {(invalid || placeMode || drawId) && (
           <div className="canvas-banners" style={{ top: topH + 8 }}>
             {invalid && (
               <div className="banner banner--warn" role="status">
                 <Icon name="warn" size={20} />
                 <span>{t('shape.invalid')}</span>
+              </div>
+            )}
+            {drawId && (
+              <div className="banner banner--accent" role="status">
+                <Icon name="pin" size={20} />
+                <span>{t('free.banner')}</span>
+                <button
+                  type="button"
+                  className="text-btn"
+                  disabled={drawPoints.length === 0}
+                  onClick={() =>
+                    studio.getState().update((d) => {
+                      const f = (d.centre ?? []).find((q) => q.id === drawId);
+                      if (f && f.type === 'free') f.points.pop();
+                    })
+                  }
+                >
+                  {t('editor.undo')}
+                </button>
+                <button type="button" className="text-btn" onClick={() => setEditorUI({ drawFigureId: null, panel: 'shape' })}>
+                  {t('common.done')}
+                </button>
               </div>
             )}
             {placeMode && (

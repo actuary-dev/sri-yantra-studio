@@ -1,10 +1,14 @@
 /** CENTRE: the figures at the heart of the yantra — triangles, stars, circles, number squares, the Sri Yantra. */
 import { useState } from 'react';
-import { centreOf, latticeHollow, latticeLines } from '../../core';
-import type { CentreFigure, CircleFigure, GridFigure, LatticeFigure, LotusFigure, Orbit, PetalShape, PolygonFigure, RaysFigure, SriFigure } from '../../core/types';
-import { circleFigure, gridFigure, latticeFigure, lotusFigure, newId, polygonFigure, raysFigure, sriFigure } from '../../presets';
+import { centreOf, latticeHollow, latticeLines, SYMBOL_NAMES, validMerges } from '../../core';
+import type {
+  ArcFigure, CentreFigure, CircleFigure, CrescentFigure, FreeFigure, GridFigure, LatticeFigure, LotusFigure, Orbit, PetalShape, PolygonFigure,
+  RaysFigure, SriFigure, SymbolFigure, SymbolName,
+} from '../../core/types';
+import { arcFigure, circleFigure, crescentFigure, freeFigure, gridFigure, latticeFigure, lotusFigure, newId, polygonFigure, raysFigure, sriFigure, symbolFigure } from '../../presets';
 import { toDevanagariNumber } from '../../text';
 import { updateDesign as update } from '../store';
+import { setEditorUI } from '../runtime';
 import { useT, type TFn, type TKey } from '../i18n';
 import type { PanelProps } from '../Editor';
 import { Group, Row, Block, Chips, ButtonRow } from '../components/List';
@@ -17,7 +21,7 @@ import { Icon } from '../components/Icon';
 import { ActionSheet } from '../components/ActionSheet';
 import { BinduGuides, ShapePanel } from './ShapePanel';
 
-const GLYPH: Record<CentreFigure['type'], string> = { sri: '✡', polygon: '△', circle: '○', grid: '▦', lotus: '❀', rays: '✳', lattice: '▲' };
+const GLYPH: Record<CentreFigure['type'], string> = { sri: '✡', polygon: '△', circle: '○', grid: '▦', lotus: '❀', rays: '✳', lattice: '▲', arc: '◠', crescent: '☾', symbol: '卐', free: '✎' };
 
 function updFig<T extends CentreFigure>(id: string, fn: (f: T) => void, coalesceKey?: string) {
   update(
@@ -60,6 +64,14 @@ function figureName(f: CentreFigure, t: TFn): string {
       return t('fig.raysN', { n: f.count });
     case 'lattice':
       return t('fig.lattice', { n: latticeLines(f).cells });
+    case 'arc':
+      return t('fig.arc');
+    case 'crescent':
+      return t('fig.crescent');
+    case 'symbol':
+      return t(`symbol.${f.symbol}` as TKey);
+    case 'free':
+      return t('fig.free', { n: f.points.length });
   }
 }
 
@@ -259,7 +271,7 @@ function CircleControls({ f, unitMm }: { f: CircleFigure; unitMm: number }) {
 function OrbitControls({ id, orbit, unitMm }: { id: string; orbit: Orbit | undefined; unitMm: number }) {
   const t = useT();
   const count = orbit && orbit.count >= 1 ? Math.round(orbit.count) : 0;
-  type Orbiting = PolygonFigure | CircleFigure;
+  type Orbiting = PolygonFigure | CircleFigure | ArcFigure | CrescentFigure | SymbolFigure;
   return (
     <>
       <Row label={t('orbit.count')} sub={t('orbit.countSub')}>
@@ -414,6 +426,164 @@ function LatticeControls({ f, unitMm }: { f: LatticeFigure; unitMm: number }) {
   );
 }
 
+function FillRow({ id, fill }: { id: string; fill: string | null }) {
+  const t = useT();
+  type Fillable = CrescentFigure | FreeFigure;
+  return (
+    <Row label={t('poly.fill')} sub={fill ? undefined : t('rings.noFill')}>
+      <div className="inline-controls">
+        {fill && <ColorWell value={fill} onChange={(v) => updFig<Fillable>(id, (x) => { x.fill = v; }, 'fill')} label={t('poly.fill')} />}
+        <Switch label={t('poly.fill')} checked={!!fill} onChange={(on) => updFig<Fillable>(id, (x) => { x.fill = on ? '#e8c15a' : null; })} />
+      </div>
+    </Row>
+  );
+}
+
+function ArcControls({ f, unitMm }: { f: ArcFigure; unitMm: number }) {
+  const t = useT();
+  return (
+    <>
+      <Block>
+        <SliderRow label={t('poly.size')} value={f.radius} min={0.02} max={2.5} step={0.005} display={mmOf(f.radius * 2, unitMm)} onChange={(v) => updFig<ArcFigure>(f.id, (x) => { x.radius = v; }, 'radius')} />
+      </Block>
+      <Block>
+        <SliderRow label={t('arc.start')} value={norm(f.startDeg)} min={-180} max={180} step={1} display={`${norm(f.startDeg).toFixed(0)}°`} onChange={(v) => updFig<ArcFigure>(f.id, (x) => { x.startDeg = v; }, 'start')} />
+      </Block>
+      <Block>
+        <SliderRow label={t('arc.sweep')} value={f.sweepDeg} min={5} max={360} step={1} display={`${f.sweepDeg.toFixed(0)}°`} onChange={(v) => updFig<ArcFigure>(f.id, (x) => { x.sweepDeg = v; }, 'sweep')} />
+      </Block>
+      <OrbitControls id={f.id} orbit={f.orbit} unitMm={unitMm} />
+      <LineWeight id={f.id} value={f.lineMm} />
+    </>
+  );
+}
+
+function CrescentControls({ f, unitMm }: { f: CrescentFigure; unitMm: number }) {
+  const t = useT();
+  const up = Math.abs(norm(f.rotationDeg)) < 0.01;
+  const down = Math.abs(Math.abs(norm(f.rotationDeg)) - 180) < 0.01;
+  return (
+    <>
+      <Block>
+        <SliderRow label={t('poly.size')} value={f.radius} min={0.02} max={2.5} step={0.005} display={mmOf(f.radius * 2, unitMm)} onChange={(v) => updFig<CrescentFigure>(f.id, (x) => { x.radius = v; }, 'radius')} />
+      </Block>
+      <Block>
+        <SliderRow label={t('crescent.thickness')} value={f.thickness} min={0.03} max={1.6} step={0.01} display={mmOf(f.thickness * f.radius, unitMm)} onChange={(v) => updFig<CrescentFigure>(f.id, (x) => { x.thickness = v; }, 'thick')} />
+      </Block>
+      <Block>
+        <SliderRow label={t('crescent.inner')} value={f.inner} min={0.5} max={1.5} step={0.01} display={`${Math.round(f.inner * 100)} %`} onChange={(v) => updFig<CrescentFigure>(f.id, (x) => { x.inner = v; }, 'inner')} />
+      </Block>
+      <Block>
+        <Segmented<'up' | 'down' | 'other'>
+          label={t('poly.direction')}
+          value={up ? 'up' : down ? 'down' : 'other'}
+          onChange={(v) => { if (v !== 'other') updFig<CrescentFigure>(f.id, (x) => { x.rotationDeg = v === 'up' ? 0 : 180; }); }}
+          options={[
+            { value: 'up', label: t('crescent.up') },
+            { value: 'down', label: t('crescent.down') },
+          ]}
+        />
+      </Block>
+      <Block>
+        <SliderRow label={t('poly.turn')} value={norm(f.rotationDeg)} min={-180} max={180} step={0.5} display={`${norm(f.rotationDeg).toFixed(1)}°`} onChange={(v) => updFig<CrescentFigure>(f.id, (x) => { x.rotationDeg = v; }, 'turn')} />
+      </Block>
+      <OrbitControls id={f.id} orbit={f.orbit} unitMm={unitMm} />
+      <LineWeight id={f.id} value={f.lineMm} />
+      <FillRow id={f.id} fill={f.fill} />
+    </>
+  );
+}
+
+function SymbolControls({ f, unitMm }: { f: SymbolFigure; unitMm: number }) {
+  const t = useT();
+  return (
+    <>
+      <Block>
+        <Chips<SymbolName>
+          label={t('poly.quick')}
+          value={f.symbol}
+          onChange={(v) => updFig<SymbolFigure>(f.id, (x) => { x.symbol = v; })}
+          options={SYMBOL_NAMES.map((n) => ({ value: n, label: t(`symbol.${n}` as TKey) }))}
+        />
+      </Block>
+      <Block>
+        <SliderRow label={t('poly.size')} value={f.size} min={0.02} max={1.5} step={0.005} display={mmOf(f.size * 2, unitMm)} onChange={(v) => updFig<SymbolFigure>(f.id, (x) => { x.size = v; }, 'size')} />
+      </Block>
+      <Block>
+        <SliderRow label={t('poly.turn')} value={norm(f.rotationDeg)} min={-180} max={180} step={0.5} display={`${norm(f.rotationDeg).toFixed(1)}°`} onChange={(v) => updFig<SymbolFigure>(f.id, (x) => { x.rotationDeg = v; }, 'turn')} />
+      </Block>
+      <OrbitControls id={f.id} orbit={f.orbit} unitMm={unitMm} />
+      <LineWeight id={f.id} value={f.lineMm} />
+    </>
+  );
+}
+
+function FreeControls({ f }: { f: FreeFigure }) {
+  const t = useT();
+  return (
+    <>
+      <p className="row-hint" style={{ margin: '4px 16px 8px' }}>{t('free.hint')}</p>
+      <ButtonRow accent icon={<Icon name="pin" />} label={t('free.draw')} sub={`${t('free.points')}: ${f.points.length}`} onClick={() => setEditorUI({ drawFigureId: f.id })} />
+      <div className="band-actions">
+        <button type="button" className="pill-btn" disabled={f.points.length === 0} onClick={() => updFig<FreeFigure>(f.id, (x) => { x.points.pop(); })}>
+          {t('free.undo')}
+        </button>
+        <button type="button" className="pill-btn is-destructive" disabled={f.points.length === 0} onClick={() => updFig<FreeFigure>(f.id, (x) => { x.points = []; })}>
+          {t('free.clear')}
+        </button>
+      </div>
+      <Row label={t('free.closed')}>
+        <Switch label={t('free.closed')} checked={f.closed} onChange={(v) => updFig<FreeFigure>(f.id, (x) => { x.closed = v; })} />
+      </Row>
+      <Row label={t('free.repeat')}>
+        <Stepper label={t('free.repeat')} value={f.repeat} min={1} max={36} onChange={(v) => updFig<FreeFigure>(f.id, (x) => { x.repeat = v; })} />
+      </Row>
+      <LineWeight id={f.id} value={f.lineMm} />
+      <FillRow id={f.id} fill={f.fill} />
+    </>
+  );
+}
+
+/** Join a block of cells into one (for a centre square such as Brahma's place in the Vastu mandala). */
+function MergeControls({ f }: { f: GridFigure }) {
+  const t = useT();
+  const [row, setRow] = useState(1);
+  const [col, setCol] = useState(1);
+  const [rows, setRows] = useState(2);
+  const [cols, setCols] = useState(2);
+  const merges = validMerges(f.merges, f.rows, f.cols);
+  const candidate = { row: row - 1, col: col - 1, rows, cols };
+  const fits = validMerges([...merges, candidate], f.rows, f.cols).length === merges.length + 1;
+  return (
+    <Block>
+      <div className="row-label">{t('grid.join')}</div>
+      {merges.map((m, i) => (
+        <div key={i} className="inline-controls" style={{ justifyContent: 'space-between', margin: '6px 0' }}>
+          <span className="row-sub">{t('grid.joinFrom', { r: m.row + 1, c: m.col + 1, h: m.rows, w: m.cols })}</span>
+          <button type="button" className="pill-btn is-destructive" onClick={() => updFig<GridFigure>(f.id, (x) => { x.merges = merges.filter((_, k) => k !== i); })}>
+            <Icon name="trash" size={16} /> {t('common.delete')}
+          </button>
+        </div>
+      ))}
+      <Row label={t('grid.joinRow')}>
+        <Stepper label={t('grid.joinRow')} value={Math.min(row, f.rows)} min={1} max={f.rows} onChange={setRow} />
+      </Row>
+      <Row label={t('grid.joinCol')}>
+        <Stepper label={t('grid.joinCol')} value={Math.min(col, f.cols)} min={1} max={f.cols} onChange={setCol} />
+      </Row>
+      <Row label={t('grid.joinRows')}>
+        <Stepper label={t('grid.joinRows')} value={rows} min={1} max={f.rows} onChange={setRows} />
+      </Row>
+      <Row label={t('grid.joinCols')}>
+        <Stepper label={t('grid.joinCols')} value={cols} min={1} max={f.cols} onChange={setCols} />
+      </Row>
+      <button type="button" className="text-btn small" disabled={!fits} onClick={() => updFig<GridFigure>(f.id, (x) => { x.merges = [...merges, candidate]; })}>
+        {t('grid.joinAdd')}
+      </button>
+    </Block>
+  );
+}
+
 const DEVA = '०१२३४५६७८९';
 const toLatinDigits = (s: string) => s.replace(/[०-९]/g, (d) => String(DEVA.indexOf(d)));
 const toDevaDigits = (s: string) => s.replace(/[0-9]/g, (d) => DEVA[Number(d)]);
@@ -484,6 +654,7 @@ function GridControls({ f, unitMm }: { f: GridFigure; unitMm: number }) {
           {usesDeva ? t('grid.toLatin') : t('grid.toDeva')}
         </button>
       </Block>
+      <MergeControls f={f} />
       <Block>
         <SliderRow
           label={t('grid.size')}
@@ -529,7 +700,7 @@ function SriControls({ f, unitMm }: { f: SriFigure; unitMm: number }) {
   );
 }
 
-type AddKind = 'triangle' | 'star6' | 'square' | 'polygon' | 'circle' | 'lotus' | 'rays' | 'lattice' | 'grid' | 'sri';
+type AddKind = 'triangle' | 'star6' | 'square' | 'polygon' | 'circle' | 'lotus' | 'rays' | 'lattice' | 'arc' | 'crescent' | 'symbol' | 'free' | 'grid' | 'sri';
 
 export function CentrePanel({ design, scene }: PanelProps) {
   const t = useT();
@@ -560,7 +731,7 @@ export function CentrePanel({ design, scene }: PanelProps) {
   const add = (kind: AddKind) => {
     const id = newId('f');
     // a new figure starts a little smaller than the smallest one already there, so it is easy to see
-    const radii = figures.filter((f): f is PolygonFigure | CircleFigure | SriFigure | LotusFigure | LatticeFigure => 'radius' in f).map((f) => f.radius);
+    const radii = figures.filter((f): f is PolygonFigure | CircleFigure | SriFigure | LotusFigure | LatticeFigure | ArcFigure | CrescentFigure => 'radius' in f).map((f) => f.radius);
     const r = radii.length ? Math.max(0.12, Math.min(...radii) * 0.6) : 1;
     const fig: CentreFigure =
       kind === 'triangle'
@@ -579,6 +750,14 @@ export function CentrePanel({ design, scene }: PanelProps) {
                     ? raysFigure(id, 12, { inner: 0, outer: r, lineMm })
                     : kind === 'lattice'
                       ? latticeFigure(id, 4, { radius: r, lineMm })
+                      : kind === 'arc'
+                        ? arcFigure(id, r, { lineMm })
+                        : kind === 'crescent'
+                          ? crescentFigure(id, r, { lineMm })
+                          : kind === 'symbol'
+                            ? symbolFigure(id, 'trident', { size: Math.min(0.3, r * 0.5), lineMm })
+                            : kind === 'free'
+                              ? freeFigure(id, [], { lineMm })
                 : kind === 'grid'
                   ? gridFigure(id, 3, 3, [6, 1, 8, 7, 5, 3, 2, 9, 4], { size: Math.min(1.2, r * 1.3), textSizeMm: Math.max(3, design.sizeMm / 22), lineMm })
                   : sriFigure(id, 1);
@@ -587,10 +766,11 @@ export function CentrePanel({ design, scene }: PanelProps) {
       d.centre.push(fig);
     });
     setOpen(id);
+    if (kind === 'free') setEditorUI({ drawFigureId: id });
   };
 
-  const kinds: AddKind[] = ['triangle', 'star6', 'square', 'polygon', 'circle', 'lotus', 'rays', 'lattice', 'grid', ...(hasSri ? [] : (['sri'] as AddKind[]))];
-  const addGlyph: Record<AddKind, string> = { triangle: '▼', star6: '✡', square: '■', polygon: '✴', circle: '○', lotus: '❀', rays: '✳', lattice: '▲', grid: '▦', sri: '✡' };
+  const kinds: AddKind[] = ['triangle', 'star6', 'square', 'polygon', 'circle', 'lotus', 'rays', 'lattice', 'arc', 'crescent', 'symbol', 'free', 'grid', ...(hasSri ? [] : (['sri'] as AddKind[]))];
+  const addGlyph: Record<AddKind, string> = { triangle: '▼', star6: '✡', square: '■', polygon: '✴', circle: '○', lotus: '❀', rays: '✳', lattice: '▲', arc: '◠', crescent: '☾', symbol: '卐', free: '✎', grid: '▦', sri: '✡' };
 
   return (
     <>
@@ -641,6 +821,10 @@ export function CentrePanel({ design, scene }: PanelProps) {
                   {f.type === 'lotus' && <LotusControls f={f} unitMm={scene.unitMm} />}
                   {f.type === 'rays' && <RaysControls f={f} unitMm={scene.unitMm} />}
                   {f.type === 'lattice' && <LatticeControls f={f} unitMm={scene.unitMm} />}
+                  {f.type === 'arc' && <ArcControls f={f} unitMm={scene.unitMm} />}
+                  {f.type === 'crescent' && <CrescentControls f={f} unitMm={scene.unitMm} />}
+                  {f.type === 'symbol' && <SymbolControls f={f} unitMm={scene.unitMm} />}
+                  {f.type === 'free' && <FreeControls f={f} />}
                 </div>
               )}
             </div>

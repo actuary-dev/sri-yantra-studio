@@ -2,6 +2,7 @@ export * from './types';
 export * from './path';
 export { buildScene, checkGeometry, centreOf } from './scene';
 export { arrange } from './planar';
+export { SYMBOL_NAMES, validMerges } from './shapes';
 export { polygonLoops, gridLayout, latticeLines, latticeHollow, raySegments, orbitPlacements } from './figures';
 export { solveGeometry, solveFree, validRange, GOAL_SOLVES, TRI, TRI_NAMES, TRI_SANSKRIT, TRI_UP } from './solver';
 export type { Solved } from './solver';

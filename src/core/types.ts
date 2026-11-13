@@ -341,9 +341,73 @@ export interface GridFigure extends FigureBase {
   lineMm: number;
   /** draw a heavier line every this many cells (0 = none), e.g. 3 for nine 3×3 blocks */
   blocks?: number;
+  /** blocks of cells joined into one; the block shows the text of its top-left cell */
+  merges?: GridMerge[];
 }
 
-export type CentreFigure = SriFigure | PolygonFigure | CircleFigure | GridFigure | LotusFigure | RaysFigure | LatticeFigure;
+export interface GridMerge {
+  /** top-left cell, counted from 0 */
+  row: number;
+  col: number;
+  rows: number;
+  cols: number;
+}
+
+/** Part of a circle. */
+export interface ArcFigure extends FigureBase {
+  type: 'arc';
+  radius: number;
+  /** where the arc begins: 0 = straight up, clockwise */
+  startDeg: number;
+  /** how far round it goes, degrees (negative = anticlockwise) */
+  sweepDeg: number;
+  lineMm: number;
+  orbit?: Orbit;
+}
+
+/** A true crescent moon. */
+export interface CrescentFigure extends FigureBase {
+  type: 'crescent';
+  radius: number;
+  /** width at the middle as a fraction of the radius */
+  thickness: number;
+  /** radius of the inner curve as a fraction of the outer (1 = classic) */
+  inner: number;
+  /** 0 = horns pointing up */
+  rotationDeg: number;
+  lineMm: number;
+  fill: string | null;
+  orbit?: Orbit;
+}
+
+export type SymbolName = 'swastika' | 'trident' | 'tmark';
+
+export interface SymbolFigure extends FigureBase {
+  type: 'symbol';
+  symbol: SymbolName;
+  /** half the symbol's height, scene units */
+  size: number;
+  rotationDeg: number;
+  lineMm: number;
+  orbit?: Orbit;
+}
+
+/** Lines drawn by hand from point to point: any irregular shape. */
+export interface FreeFigure extends FigureBase {
+  type: 'free';
+  /** scene units; the yantra's centre is (0, 0) */
+  points: { x: number; y: number }[];
+  /** join the last point back to the first */
+  closed: boolean;
+  /** draw the shape this many times, turned evenly about the centre (1 = once) */
+  repeat: number;
+  lineMm: number;
+  fill: string | null;
+}
+
+export type CentreFigure =
+  | SriFigure | PolygonFigure | CircleFigure | GridFigure | LotusFigure | RaysFigure | LatticeFigure
+  | ArcFigure | CrescentFigure | SymbolFigure | FreeFigure;
 
 export type Orient = 'upright' | 'radial' | 'tangent' | 'fixed';
 

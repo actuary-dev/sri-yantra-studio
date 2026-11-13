@@ -58,6 +58,8 @@ interface EditorUIState {
   /** a place was chosen; the compact editor is open */
   pending: PendingPlace | null;
   selectedCustomId: string | null;
+  /** id of the free shape that canvas taps are adding points to */
+  drawFigureId: string | null;
   exportOpen: boolean;
   helpOpen: boolean;
 }
@@ -67,6 +69,7 @@ export const editorUI = createStore<EditorUIState>()(() => ({
   placeMode: false,
   pending: null,
   selectedCustomId: null,
+  drawFigureId: null,
   exportOpen: false,
   helpOpen: false,
 }));

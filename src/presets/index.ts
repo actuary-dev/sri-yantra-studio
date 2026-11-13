@@ -2,7 +2,7 @@
  * Starting designs. Geometry values are documented in docs/MATH.md.
  */
 import type {
-  Band, BhupuraBand, CircleBand, CircleFigure, CustomLabel, Design, BeadBand, GridFigure, LabelSet, LatticeFigure, LotusBand, LotusFigure,
+  ArcFigure, Band, BhupuraBand, CircleBand, CircleFigure, CrescentFigure, CustomLabel, Design, FreeFigure, SymbolFigure, SymbolName, BeadBand, GridFigure, LabelSet, LatticeFigure, LotusBand, LotusFigure,
   PolygonFigure, RaysFigure, SriFigure, TextRingBand,
 } from '../core/types';
 import { createLabelSet, toDevanagariNumber } from '../text';
@@ -56,6 +56,19 @@ export const raysFigure = (id: string, count: number, p: Partial<RaysFigure> = {
 });
 export const latticeFigure = (id: string, rows: number, p: Partial<LatticeFigure> = {}): LatticeFigure => ({
   id, type: 'lattice', visible: true, rows, hollow: 0, radius: 1, rotationDeg: 0, lineMm: 0.5, ...p,
+});
+
+export const arcFigure = (id: string, radius: number, p: Partial<ArcFigure> = {}): ArcFigure => ({
+  id, type: 'arc', visible: true, radius, startDeg: -90, sweepDeg: 180, lineMm: 0.5, ...p,
+});
+export const crescentFigure = (id: string, radius: number, p: Partial<CrescentFigure> = {}): CrescentFigure => ({
+  id, type: 'crescent', visible: true, radius, thickness: 0.35, inner: 1, rotationDeg: 0, lineMm: 0.5, fill: null, ...p,
+});
+export const symbolFigure = (id: string, symbol: SymbolName, p: Partial<SymbolFigure> = {}): SymbolFigure => ({
+  id, type: 'symbol', visible: true, symbol, size: 0.15, rotationDeg: 0, lineMm: 0.5, ...p,
+});
+export const freeFigure = (id: string, points: [number, number][], p: Partial<FreeFigure> = {}): FreeFigure => ({
+  id, type: 'free', visible: true, points: points.map(([x, y]) => ({ x, y })), closed: true, repeat: 1, lineMm: 0.5, fill: null, ...p,
 });
 
 /** A ready-filled label set on any group of places. */
@@ -385,6 +398,71 @@ export const PRESETS: Preset[] = [
       }),
   },
   {
+    id: 'swastika',
+    category: 'forms',
+    name: 'Svastika with Four Dots',
+    nameHi: 'स्वस्तिक',
+    blurb: 'The right-turning svastika with a dot in each arm, in a square.',
+    blurbHi: 'चार बिन्दुओं सहित दक्षिणावर्त स्वस्तिक, चतुरस्र में।',
+    make: () =>
+      createDesign({
+        name: 'Svastika Yantra',
+        sizeMm: 200,
+        centre: [
+          symbolFigure('sv', 'swastika', { size: 0.6, lineMm: 1.2 }),
+          circleFigure('dots', 0.05, { orbit: { count: 4, radius: 0.42, phaseDeg: 45 } }),
+          polygonFigure('sq', 4, { rotationDeg: 45, radius: 1.2, lines: 2, lineGapMm: 2 }),
+        ],
+        bindu: noBindu,
+        bands: [],
+        style: { ...PAPERS.vermilion },
+      }),
+  },
+  {
+    id: 'trishula',
+    category: 'forms',
+    name: 'Triangle Guarded by Tridents',
+    nameHi: 'त्रिशूल रक्षित त्रिकोण',
+    blurb: 'A downward triangle in a lotus, with a trident in each corner of the enclosure.',
+    blurbHi: 'कमल में अधोमुख त्रिकोण, भूपुर के चारों कोनों में त्रिशूल।',
+    make: () =>
+      createDesign({
+        name: 'Trishula Yantra',
+        centre: [polygonFigure('p1', 3, { rotationDeg: 180 }), symbolFigure('tri', 'trident', { size: 0.13, orbit: { count: 4, radius: 1.52, phaseDeg: 45 } })],
+        bands: simpleBands(),
+      }),
+  },
+  {
+    id: 'chandrabindu',
+    category: 'forms',
+    name: 'Crescent and Dot',
+    nameHi: 'चन्द्र-बिन्दु',
+    blurb: 'A crescent moon holding a dot, ringed by an arc of light, in a lotus.',
+    blurbHi: 'बिन्दु धारण किए अर्धचन्द्र, ऊपर प्रभा-चाप, कमल में।',
+    make: () =>
+      createDesign({
+        name: 'Chandra Bindu',
+        centre: [crescentFigure('moon', 0.62, { thickness: 0.42, fill: null }), circleFigure('dot', 0.09, { orbit: { count: 1, radius: 0.2, phaseDeg: 0 } }), arcFigure('halo', 0.86, { startDeg: -70, sweepDeg: 140 })],
+        bindu: noBindu,
+        bands: simpleBands(),
+        style: { ...PAPERS.night },
+      }),
+  },
+  {
+    id: 'kites',
+    category: 'forms',
+    name: 'Eight Blades',
+    nameHi: 'अष्ट पत्र',
+    blurb: 'One hand-drawn blade repeated eight times round the centre. Shows a free shape of your own, turned into a pattern.',
+    blurbHi: 'हाथ से बनाया एक पत्र, केन्द्र के चारों ओर आठ बार। अपनी बनाई आकृति से रचना का उदाहरण।',
+    make: () =>
+      createDesign({
+        name: 'Eight Blades',
+        centre: [freeFigure('blade', [[0, -0.97], [0.2, -0.5], [0, -0.22], [-0.2, -0.5]], { repeat: 8 }), circleFigure('ci', 0.2)],
+        bands: simpleBands(),
+      }),
+  },
+  {
     id: 'bhairavi',
     category: 'mahavidya',
     name: 'Downward Triangle in Star',
@@ -487,19 +565,19 @@ export const PRESETS: Preset[] = [
     category: 'chakras',
     name: 'Svadhisthana · 6 petals',
     nameHi: 'स्वाधिष्ठान · ६ दल',
-    blurb: 'A crescent made by two circles in a six-petalled lotus, seed syllable Vam.',
-    blurbHi: 'षड्दल कमल में दो वृत्तों से बना अर्धचन्द्र, बीज वं।',
+    blurb: 'A crescent moon in a six-petalled lotus, seed syllable Vam.',
+    blurbHi: 'षड्दल कमल में अर्धचन्द्र, बीज वं।',
     make: () =>
-      chakraDesign('Svadhisthana', 6, 'बं भं मं यं रं लं', 'वं', [circleFigure('moon', 0.78, { orbit: { count: 1, radius: 0.2, phaseDeg: 0 } })], { bijaAt: [0, -0.2] }),
+      chakraDesign('Svadhisthana', 6, 'बं भं मं यं रं लं', 'वं', [crescentFigure('moon', 0.86, { thickness: 0.36 })], { bijaAt: [0, -0.18] }),
   },
   {
     id: 'manipura',
     category: 'chakras',
     name: 'Manipura · 10 petals',
     nameHi: 'मणिपूर · १० दल',
-    blurb: 'A downward triangle in a ten-petalled lotus, seed syllable Ram.',
+    blurb: 'A downward triangle with a T-mark on each side, in a ten-petalled lotus, seed syllable Ram.',
     blurbHi: 'दशदल कमल में अधोमुख त्रिकोण, बीज रं।',
-    make: () => chakraDesign('Manipura', 10, 'डं ढं णं तं थं दं धं नं पं फं', 'रं', [polygonFigure('tri', 3, { rotationDeg: 180, radius: 0.96 })], { height: 0.36 }),
+    make: () => chakraDesign('Manipura', 10, 'डं ढं णं तं थं दं धं नं पं फं', 'रं', [polygonFigure('tri', 3, { rotationDeg: 180, radius: 0.8 }), symbolFigure('marks', 'tmark', { size: 0.13, orbit: { count: 3, radius: 0.4, phaseDeg: 0 } })], { height: 0.36 }),
   },
   {
     id: 'anahata',
@@ -643,13 +721,13 @@ export const PRESETS: Preset[] = [
     category: 'numbers',
     name: 'Eighty-One Squares',
     nameHi: 'इक्यासी पद मण्डल',
-    blurb: 'The nine-by-nine ground plan of the Vastu mandala, empty for you to fill, Brahma at the centre.',
+    blurb: 'The nine-by-nine ground plan of the Vastu mandala, Brahma holding the nine middle squares as one, the rest empty for you to fill.',
     blurbHi: 'वास्तु मण्डल का नौ-गुणा-नौ पद विन्यास, भरने के लिए रिक्त, मध्य में ब्रह्मा।',
     make: () =>
       createDesign({
         name: 'Vastu Mandala',
         sizeMm: 300,
-        centre: [gridFigure('g1', 9, 9, Array.from({ length: 81 }, (_, i) => (i === 40 ? 'ब्रह्मा' : '')), { size: 1.9, textSizeMm: 6, blocks: 3 })],
+        centre: [gridFigure('g1', 9, 9, Array.from({ length: 81 }, (_, i) => (i === 30 ? 'ब्रह्मा' : '')), { size: 1.9, textSizeMm: 8, merges: [{ row: 3, col: 3, rows: 3, cols: 3 }] })],
         bindu: noBindu,
         bands: [],
       }),
