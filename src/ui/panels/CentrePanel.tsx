@@ -1,11 +1,11 @@
 /** CENTRE: the figures at the heart of the yantra — triangles, stars, circles, number squares, the Sri Yantra. */
 import { useEffect, useState } from 'react';
-import { centreOf, latticeHollow, latticeLines, SYMBOL_NAMES, validMerges } from '../../core';
+import { angleAt, centreOf, latticeHollow, latticeLines, sriAsTriangles, SYMBOL_NAMES, validMerges } from '../../core';
 import type {
   ArcFigure, CentreFigure, CircleFigure, CrescentFigure, FreeFigure, GridFigure, LatticeFigure, LotusFigure, Orbit, PetalShape, PolygonFigure,
-  RaysFigure, SriFigure, SymbolFigure, SymbolName,
+  RaysFigure, SriFigure, SymbolFigure, SymbolName, TriangleFigure,
 } from '../../core/types';
-import { arcFigure, circleFigure, crescentFigure, freeFigure, gridFigure, latticeFigure, lotusFigure, newId, polygonFigure, raysFigure, shapeFigure, sriFigure, symbolFigure } from '../../presets';
+import { arcFigure, circleFigure, crescentFigure, freeFigure, gridFigure, latticeFigure, lotusFigure, newId, polygonFigure, raysFigure, sriFigure, shapeFigure, symbolFigure, triangleFigure } from '../../presets';
 import { toDevanagariNumber } from '../../text';
 import { updateDesign as update } from '../store';
 import { setEditorUI, showToast, useEditorUI } from '../runtime';
@@ -21,11 +21,14 @@ import { Switch } from '../components/Switch';
 import { ColorWell } from '../components/ColorWell';
 import { Icon } from '../components/Icon';
 import { ActionSheet } from '../components/ActionSheet';
+import { NumberField } from '../components/NumberField';
 import { BinduGuides, ShapePanel } from './ShapePanel';
+import { CheckPanel } from './CheckPanel';
+import { TriangleControls, triangleName } from './TrianglePanel';
 
-const GLYPH: Record<CentreFigure['type'], string> = { sri: '✡', polygon: '△', circle: '○', grid: '▦', lotus: '❀', rays: '✳', lattice: '▲', arc: '◠', crescent: '☾', symbol: '卐', free: '✎', shape: '△' };
+const GLYPH: Record<CentreFigure['type'], string> = { sri: '✡', polygon: '△', circle: '○', grid: '▦', lotus: '❀', rays: '✳', lattice: '▲', arc: '◠', crescent: '☾', symbol: '卐', free: '✎', triangle: '◺', shape: '△' };
 
-function updFig<T extends CentreFigure>(id: string, fn: (f: T) => void, coalesceKey?: string) {
+export function updFig<T extends CentreFigure>(id: string, fn: (f: T) => void, coalesceKey?: string) {
   update(
     (d) => {
       d.centre = centreOf(d);
@@ -76,12 +79,14 @@ function figureName(f: CentreFigure, t: TFn): string {
       return t('fig.free', { n: f.points.length });
     case 'shape':
       return shapeName(f, t);
+    case 'triangle':
+      return triangleName(f, t);
   }
 }
 
 const mmOf = (v: number, unitMm: number) => `${(v * unitMm).toFixed(1)} mm`;
 
-function LineWeight({ id, value }: { id: string; value: number }) {
+export function LineWeight({ id, value }: { id: string; value: number }) {
   const t = useT();
   return (
     <Block>
@@ -163,7 +168,7 @@ function PolygonControls({ f, unitMm }: { f: PolygonFigure; unitMm: number }) {
           min={0.03}
           max={2.5}
           step={0.005}
-          display={mmOf(f.radius * 2, unitMm)}
+          numeric={{ digits: 2, suffix: 'mm', scale: 2 * unitMm }}
           onChange={(v) => updFig<PolygonFigure>(f.id, (x) => { x.radius = v; }, 'radius')}
         />
       </Block>
@@ -185,10 +190,13 @@ function PolygonControls({ f, unitMm }: { f: PolygonFigure; unitMm: number }) {
           min={-180}
           max={180}
           step={0.5}
-          display={`${norm(f.rotationDeg).toFixed(1)}°`}
+          numeric={{ digits: 3, suffix: '°' }}
           onChange={(v) => updFig<PolygonFigure>(f.id, (x) => { x.rotationDeg = v; }, 'turn')}
         />
       </Block>
+      <Row label={t('poly.tipAngle')} sub={t('poly.tipAngleSub', { n: +(360 / f.sides).toFixed(4) })}>
+        <span className="row-value">{+(180 - (360 * Math.min(f.step, maxStep)) / f.sides).toFixed(4)}°</span>
+      </Row>
       <Row label={t('poly.copies')} sub={t('poly.copiesSub')}>
         <Stepper label={t('poly.copies')} value={f.nest} min={1} max={12} onChange={(v) => updFig<PolygonFigure>(f.id, (x) => { x.nest = v; })} />
       </Row>
@@ -253,7 +261,7 @@ function CircleControls({ f, unitMm }: { f: CircleFigure; unitMm: number }) {
           min={0.02}
           max={2.5}
           step={0.005}
-          display={mmOf(f.radius * 2, unitMm)}
+          numeric={{ digits: 2, suffix: 'mm', scale: 2 * unitMm }}
           onChange={(v) => updFig<CircleFigure>(f.id, (x) => { x.radius = v; }, 'radius')}
         />
       </Block>
@@ -280,10 +288,10 @@ function CircleControls({ f, unitMm }: { f: CircleFigure; unitMm: number }) {
 }
 
 /** Repeat a figure around the centre (or simply move it off-centre with a count of one). */
-function OrbitControls({ id, orbit, unitMm }: { id: string; orbit: Orbit | undefined; unitMm: number }) {
+export function OrbitControls({ id, orbit, unitMm }: { id: string; orbit: Orbit | undefined; unitMm: number }) {
   const t = useT();
   const count = orbit && orbit.count >= 1 ? Math.round(orbit.count) : 0;
-  type Orbiting = PolygonFigure | CircleFigure | ArcFigure | CrescentFigure | SymbolFigure;
+  type Orbiting = PolygonFigure | CircleFigure | ArcFigure | CrescentFigure | SymbolFigure | TriangleFigure;
   return (
     <>
       <Row label={t('orbit.count')} sub={t('orbit.countSub')}>
@@ -309,7 +317,7 @@ function OrbitControls({ id, orbit, unitMm }: { id: string; orbit: Orbit | undef
               min={0}
               max={2.5}
               step={0.005}
-              display={mmOf(orbit.radius, unitMm)}
+              numeric={{ digits: 2, suffix: 'mm', scale: unitMm }}
               onChange={(v) => updFig<Orbiting>(id, (x) => { if (x.orbit) x.orbit.radius = v; }, 'orbitR')}
             />
           </Block>
@@ -320,7 +328,7 @@ function OrbitControls({ id, orbit, unitMm }: { id: string; orbit: Orbit | undef
               min={-180}
               max={180}
               step={0.5}
-              display={`${norm(orbit.phaseDeg).toFixed(1)}°`}
+              numeric={{ digits: 3, suffix: '°' }}
               onChange={(v) => updFig<Orbiting>(id, (x) => { if (x.orbit) x.orbit.phaseDeg = v; }, 'orbitP')}
             />
           </Block>
@@ -348,7 +356,7 @@ function LotusControls({ f, unitMm }: { f: LotusFigure; unitMm: number }) {
         />
       </Block>
       <Block>
-        <SliderRow label={t('poly.size')} value={f.radius} min={0.02} max={2.5} step={0.005} display={mmOf(f.radius * 2, unitMm)} onChange={(v) => updFig<LotusFigure>(f.id, (x) => { x.radius = v; }, 'radius')} />
+        <SliderRow label={t('poly.size')} value={f.radius} min={0.02} max={2.5} step={0.005} numeric={{ digits: 2, suffix: 'mm', scale: 2 * unitMm }} onChange={(v) => updFig<LotusFigure>(f.id, (x) => { x.radius = v; }, 'radius')} />
       </Block>
       <Block>
         <SliderRow label={t('rings.height')} value={f.height} min={0.02} max={1} step={0.005} display={mmOf(f.height, unitMm)} onChange={(v) => updFig<LotusFigure>(f.id, (x) => { x.height = v; }, 'height')} />
@@ -387,7 +395,7 @@ function RaysControls({ f, unitMm }: { f: RaysFigure; unitMm: number }) {
         <SliderRow label={t('rays.outer')} value={f.outer} min={0.05} max={2.5} step={0.005} display={mmOf(f.outer, unitMm)} onChange={(v) => updFig<RaysFigure>(f.id, (x) => { x.outer = Math.max(v, x.inner + 0.01); }, 'outer')} />
       </Block>
       <Block>
-        <SliderRow label={t('poly.turn')} value={norm(f.rotationDeg)} min={-180} max={180} step={0.5} display={`${norm(f.rotationDeg).toFixed(1)}°`} onChange={(v) => updFig<RaysFigure>(f.id, (x) => { x.rotationDeg = v; }, 'turn')} />
+        <SliderRow label={t('poly.turn')} value={norm(f.rotationDeg)} min={-180} max={180} step={0.5} numeric={{ digits: 3, suffix: '°' }} onChange={(v) => updFig<RaysFigure>(f.id, (x) => { x.rotationDeg = v; }, 'turn')} />
       </Block>
       <LineWeight id={f.id} value={f.lineMm} />
     </>
@@ -417,7 +425,7 @@ function LatticeControls({ f, unitMm }: { f: LatticeFigure; unitMm: number }) {
         </div>
       </Row>
       <Block>
-        <SliderRow label={t('poly.size')} value={f.radius} min={0.05} max={2.5} step={0.005} display={mmOf(f.radius * 2, unitMm)} onChange={(v) => updFig<LatticeFigure>(f.id, (x) => { x.radius = v; }, 'radius')} />
+        <SliderRow label={t('poly.size')} value={f.radius} min={0.05} max={2.5} step={0.005} numeric={{ digits: 2, suffix: 'mm', scale: 2 * unitMm }} onChange={(v) => updFig<LatticeFigure>(f.id, (x) => { x.radius = v; }, 'radius')} />
       </Block>
       <Block>
         <Segmented<'up' | 'down' | 'other'>
@@ -431,16 +439,16 @@ function LatticeControls({ f, unitMm }: { f: LatticeFigure; unitMm: number }) {
         />
       </Block>
       <Block>
-        <SliderRow label={t('poly.turn')} value={norm(f.rotationDeg)} min={-180} max={180} step={0.5} display={`${norm(f.rotationDeg).toFixed(1)}°`} onChange={(v) => updFig<LatticeFigure>(f.id, (x) => { x.rotationDeg = v; }, 'turn')} />
+        <SliderRow label={t('poly.turn')} value={norm(f.rotationDeg)} min={-180} max={180} step={0.5} numeric={{ digits: 3, suffix: '°' }} onChange={(v) => updFig<LatticeFigure>(f.id, (x) => { x.rotationDeg = v; }, 'turn')} />
       </Block>
       <LineWeight id={f.id} value={f.lineMm} />
     </>
   );
 }
 
-function FillRow({ id, fill }: { id: string; fill: string | null }) {
+export function FillRow({ id, fill }: { id: string; fill: string | null }) {
   const t = useT();
-  type Fillable = CrescentFigure | FreeFigure;
+  type Fillable = CrescentFigure | FreeFigure | TriangleFigure;
   return (
     <Row label={t('poly.fill')} sub={fill ? undefined : t('rings.noFill')}>
       <div className="inline-controls">
@@ -456,13 +464,13 @@ function ArcControls({ f, unitMm }: { f: ArcFigure; unitMm: number }) {
   return (
     <>
       <Block>
-        <SliderRow label={t('poly.size')} value={f.radius} min={0.02} max={2.5} step={0.005} display={mmOf(f.radius * 2, unitMm)} onChange={(v) => updFig<ArcFigure>(f.id, (x) => { x.radius = v; }, 'radius')} />
+        <SliderRow label={t('poly.size')} value={f.radius} min={0.02} max={2.5} step={0.005} numeric={{ digits: 2, suffix: 'mm', scale: 2 * unitMm }} onChange={(v) => updFig<ArcFigure>(f.id, (x) => { x.radius = v; }, 'radius')} />
       </Block>
       <Block>
-        <SliderRow label={t('arc.start')} value={norm(f.startDeg)} min={-180} max={180} step={1} display={`${norm(f.startDeg).toFixed(0)}°`} onChange={(v) => updFig<ArcFigure>(f.id, (x) => { x.startDeg = v; }, 'start')} />
+        <SliderRow label={t('arc.start')} value={norm(f.startDeg)} min={-180} max={180} step={1} numeric={{ digits: 2, suffix: '°' }} onChange={(v) => updFig<ArcFigure>(f.id, (x) => { x.startDeg = v; }, 'start')} />
       </Block>
       <Block>
-        <SliderRow label={t('arc.sweep')} value={f.sweepDeg} min={5} max={360} step={1} display={`${f.sweepDeg.toFixed(0)}°`} onChange={(v) => updFig<ArcFigure>(f.id, (x) => { x.sweepDeg = v; }, 'sweep')} />
+        <SliderRow label={t('arc.sweep')} value={f.sweepDeg} min={5} max={360} step={1} numeric={{ digits: 2, suffix: '°' }} onChange={(v) => updFig<ArcFigure>(f.id, (x) => { x.sweepDeg = v; }, 'sweep')} />
       </Block>
       <OrbitControls id={f.id} orbit={f.orbit} unitMm={unitMm} />
       <LineWeight id={f.id} value={f.lineMm} />
@@ -477,7 +485,7 @@ function CrescentControls({ f, unitMm }: { f: CrescentFigure; unitMm: number }) 
   return (
     <>
       <Block>
-        <SliderRow label={t('poly.size')} value={f.radius} min={0.02} max={2.5} step={0.005} display={mmOf(f.radius * 2, unitMm)} onChange={(v) => updFig<CrescentFigure>(f.id, (x) => { x.radius = v; }, 'radius')} />
+        <SliderRow label={t('poly.size')} value={f.radius} min={0.02} max={2.5} step={0.005} numeric={{ digits: 2, suffix: 'mm', scale: 2 * unitMm }} onChange={(v) => updFig<CrescentFigure>(f.id, (x) => { x.radius = v; }, 'radius')} />
       </Block>
       <Block>
         <SliderRow label={t('crescent.thickness')} value={f.thickness} min={0.03} max={1.6} step={0.01} display={mmOf(f.thickness * f.radius, unitMm)} onChange={(v) => updFig<CrescentFigure>(f.id, (x) => { x.thickness = v; }, 'thick')} />
@@ -497,7 +505,7 @@ function CrescentControls({ f, unitMm }: { f: CrescentFigure; unitMm: number }) 
         />
       </Block>
       <Block>
-        <SliderRow label={t('poly.turn')} value={norm(f.rotationDeg)} min={-180} max={180} step={0.5} display={`${norm(f.rotationDeg).toFixed(1)}°`} onChange={(v) => updFig<CrescentFigure>(f.id, (x) => { x.rotationDeg = v; }, 'turn')} />
+        <SliderRow label={t('poly.turn')} value={norm(f.rotationDeg)} min={-180} max={180} step={0.5} numeric={{ digits: 3, suffix: '°' }} onChange={(v) => updFig<CrescentFigure>(f.id, (x) => { x.rotationDeg = v; }, 'turn')} />
       </Block>
       <OrbitControls id={f.id} orbit={f.orbit} unitMm={unitMm} />
       <LineWeight id={f.id} value={f.lineMm} />
@@ -522,7 +530,7 @@ function SymbolControls({ f, unitMm }: { f: SymbolFigure; unitMm: number }) {
         <SliderRow label={t('poly.size')} value={f.size} min={0.02} max={1.5} step={0.005} display={mmOf(f.size * 2, unitMm)} onChange={(v) => updFig<SymbolFigure>(f.id, (x) => { x.size = v; }, 'size')} />
       </Block>
       <Block>
-        <SliderRow label={t('poly.turn')} value={norm(f.rotationDeg)} min={-180} max={180} step={0.5} display={`${norm(f.rotationDeg).toFixed(1)}°`} onChange={(v) => updFig<SymbolFigure>(f.id, (x) => { x.rotationDeg = v; }, 'turn')} />
+        <SliderRow label={t('poly.turn')} value={norm(f.rotationDeg)} min={-180} max={180} step={0.5} numeric={{ digits: 3, suffix: '°' }} onChange={(v) => updFig<SymbolFigure>(f.id, (x) => { x.rotationDeg = v; }, 'turn')} />
       </Block>
       <OrbitControls id={f.id} orbit={f.orbit} unitMm={unitMm} />
       <LineWeight id={f.id} value={f.lineMm} />
@@ -530,8 +538,12 @@ function SymbolControls({ f, unitMm }: { f: SymbolFigure; unitMm: number }) {
   );
 }
 
-function FreeControls({ f }: { f: FreeFigure }) {
+const SNAPS = [0, 15, 22.5, 30, 45];
+
+function FreeControls({ f, unitMm }: { f: FreeFigure; unitMm: number }) {
   const t = useT();
+  const snap = useEditorUI((s) => s.drawSnapDeg);
+  const n = f.points.length;
   return (
     <>
       <p className="row-hint" style={{ margin: '4px 16px 8px' }}>{t('free.hint')}</p>
@@ -544,6 +556,28 @@ function FreeControls({ f }: { f: FreeFigure }) {
           {t('free.clear')}
         </button>
       </div>
+      <Block>
+        <Chips<number> label={t('free.snap')} value={snap} onChange={(v) => setEditorUI({ drawSnapDeg: v })} options={SNAPS.map((d) => ({ value: d, label: d === 0 ? t('free.snapOff') : `${d}°` }))} />
+        <p className="row-hint">{t('free.snap')}</p>
+      </Block>
+      {n > 0 && (
+        <Block>
+          <div className="row-label">{t('free.coords')}</div>
+          <p className="row-hint">{t('free.coordsHint')}</p>
+          {f.points.map((q, i) => {
+            const prev = f.points[(i - 1 + n) % n], next = f.points[(i + 1) % n];
+            const inner = n >= 3 && (f.closed || (i > 0 && i < n - 1));
+            return (
+              <div key={i} className="num-grid num-grid--point">
+                <span className="band-index">{i + 1}</span>
+                <NumberField label={`${i + 1} · ${t('tri.x')}`} value={q.x * unitMm} min={-5000} max={5000} digits={3} suffix="mm" onChange={(v) => updFig<FreeFigure>(f.id, (x) => { x.points[i].x = v / unitMm; })} />
+                <NumberField label={`${i + 1} · ${t('tri.y')}`} value={-q.y * unitMm} min={-5000} max={5000} digits={3} suffix="mm" onChange={(v) => updFig<FreeFigure>(f.id, (x) => { x.points[i].y = -v / unitMm; })} />
+                <span className="row-sub">{inner ? `∠ ${angleAt(q, prev, next).toFixed(2)}°` : ''}</span>
+              </div>
+            );
+          })}
+        </Block>
+      )}
       <Row label={t('free.closed')}>
         <Switch label={t('free.closed')} checked={f.closed} onChange={(v) => updFig<FreeFigure>(f.id, (x) => { x.closed = v; })} />
       </Row>
@@ -619,6 +653,22 @@ export function magicSum(texts: string[], rows: number, cols: number): number | 
   return sums.every((s) => Math.abs(s - sums[0]) < 1e-9) ? sums[0] : null;
 }
 
+/** Further facts about a number square: does it use 1…n once each, and do the broken diagonals add up too? */
+export function gridFacts(texts: string[], rows: number, cols: number): { normal: boolean; pandiagonal: boolean } {
+  const sum = magicSum(texts, rows, cols);
+  if (sum === null || rows !== cols) return { normal: false, pandiagonal: false };
+  const n = rows;
+  const v = texts.slice(0, n * n).map((s) => Number(toLatinDigits((s ?? '').trim())));
+  const normal = [...v].sort((a, b) => a - b).every((x, i) => x === i + 1);
+  let pandiagonal = n >= 4;
+  for (let k = 0; k < n && pandiagonal; k++) {
+    let d1 = 0, d2 = 0;
+    for (let i = 0; i < n; i++) { d1 += v[i * n + ((i + k) % n)]; d2 += v[i * n + ((k - i + n) % n)]; }
+    if (Math.abs(d1 - sum) > 1e-9 || Math.abs(d2 - sum) > 1e-9) pandiagonal = false;
+  }
+  return { normal, pandiagonal };
+}
+
 function GridControls({ f, unitMm }: { f: GridFigure; unitMm: number }) {
   const t = useT();
   const resize = (rows: number, cols: number) =>
@@ -630,6 +680,7 @@ function GridControls({ f, unitMm }: { f: GridFigure; unitMm: number }) {
       x.texts = next;
     });
   const sum = magicSum(f.texts, f.rows, f.cols);
+  const facts = gridFacts(f.texts, f.rows, f.cols);
   const allFilled = f.texts.slice(0, f.rows * f.cols).every((s) => (s ?? '').trim() !== '');
   const usesDeva = f.texts.some((s) => /[०-९]/.test(s ?? ''));
   return (
@@ -657,7 +708,11 @@ function GridControls({ f, unitMm }: { f: GridFigure; unitMm: number }) {
           ))}
         </div>
         {allFilled && sum !== null && (
-          <p className="row-hint">✓ {t('grid.sumsOk', { n: usesDeva ? toDevanagariNumber(sum) : sum })}</p>
+          <p className="row-hint">
+            ✓ {t('grid.sumsOk', { n: usesDeva ? toDevanagariNumber(sum) : sum })}
+            {facts.normal ? ` ${t('grid.normal', { n: f.rows * f.cols })}` : ''}
+            {facts.pandiagonal ? ` ${t('grid.pandiagonal')}` : ''}
+          </p>
         )}
         {allFilled && sum === null && f.texts.slice(0, f.rows * f.cols).every((s) => /^[\d०-९.\-\s]+$/.test(s ?? '')) && (
           <p className="row-hint">{t('grid.sumsDiffer')}</p>
@@ -695,9 +750,25 @@ function GridControls({ f, unitMm }: { f: GridFigure; unitMm: number }) {
   );
 }
 
-function SriControls({ f, unitMm }: { f: SriFigure; unitMm: number }) {
+function SriControls({ f, unitMm, design }: { f: SriFigure; unitMm: number; design: PanelProps['design'] }) {
   const t = useT();
+  const separate = () => {
+    const parts = sriAsTriangles(design, f.radius, newId('s'));
+    if (!parts) return;
+    update((d) => {
+      d.centre = centreOf(d);
+      const i = d.centre.findIndex((x) => x.id === f.id);
+      if (i < 0) return;
+      d.centre.splice(i, 1, ...parts.triangles);
+      // the bindu stays where the Sri Yantra had it
+      d.bindu.x = parts.bindu.x;
+      d.bindu.y = parts.bindu.y;
+      d.guides.checks = true;
+    });
+    showToast(t('sri.separated'), 'info', 6000);
+  };
   return (
+    <>
     <Block>
       <SliderRow
         label={t('poly.size')}
@@ -705,14 +776,16 @@ function SriControls({ f, unitMm }: { f: SriFigure; unitMm: number }) {
         min={0.1}
         max={2}
         step={0.005}
-        display={mmOf(f.radius * 2, unitMm)}
+        numeric={{ digits: 2, suffix: 'mm', scale: 2 * unitMm }}
         onChange={(v) => updFig<SriFigure>(f.id, (x) => { x.radius = v; }, 'radius')}
       />
     </Block>
+    <ButtonRow icon={<span aria-hidden="true" style={{ fontSize: 22, lineHeight: 1 }}>◺</span>} label={t('sri.separate')} sub={t('sri.separateSub')} onClick={separate} />
+    </>
   );
 }
 
-type AddKind = 'triangle' | 'star6' | 'square' | 'polygon' | 'circle' | 'lotus' | 'rays' | 'lattice' | 'arc' | 'crescent' | 'symbol' | 'free' | 'grid' | 'sri';
+type AddKind = 'triangle' | 'freeTriangle' | 'star6' | 'square' | 'polygon' | 'circle' | 'lotus' | 'rays' | 'lattice' | 'arc' | 'crescent' | 'symbol' | 'free' | 'grid' | 'sri';
 
 export function CentrePanel({ design, scene }: PanelProps) {
   const t = useT();
@@ -756,6 +829,8 @@ export function CentrePanel({ design, scene }: PanelProps) {
     const fig: CentreFigure =
       kind === 'triangle'
         ? polygonFigure(id, 3, { radius: r, rotationDeg: 180, lineMm })
+        : kind === 'freeTriangle'
+          ? triangleFigure(id, { base: r * 1.2, height: r * 1.5, lineMm })
         : kind === 'star6'
           ? polygonFigure(id, 6, { step: 2, radius: r, lineMm })
           : kind === 'square'
@@ -784,6 +859,7 @@ export function CentrePanel({ design, scene }: PanelProps) {
     update((d) => {
       d.centre = centreOf(d);
       d.centre.push(fig);
+      if (fig.type === 'sri') { delete d.bindu.x; delete d.bindu.y; }
     });
     setOpen(id);
     if (kind === 'free') setEditorUI({ drawFigureId: id });
@@ -804,8 +880,8 @@ export function CentrePanel({ design, scene }: PanelProps) {
     if (typeof window !== 'undefined' && window.matchMedia && !window.matchMedia('(min-width: 900px)').matches) setEditorUI({ panel: null });
   };
 
-  const kinds: AddKind[] = ['triangle', 'star6', 'square', 'polygon', 'circle', 'lotus', 'rays', 'lattice', 'arc', 'crescent', 'symbol', 'free', 'grid', ...(hasSri ? [] : (['sri'] as AddKind[]))];
-  const addGlyph: Record<AddKind, string> = { triangle: '▼', star6: '✡', square: '■', polygon: '✴', circle: '○', lotus: '❀', rays: '✳', lattice: '▲', arc: '◠', crescent: '☾', symbol: '卐', free: '✎', grid: '▦', sri: '✡' };
+  const kinds: AddKind[] = ['freeTriangle', 'triangle', 'star6', 'square', 'polygon', 'circle', 'lotus', 'rays', 'lattice', 'arc', 'crescent', 'symbol', 'free', 'grid', ...(hasSri ? [] : (['sri'] as AddKind[]))];
+  const addGlyph: Record<AddKind, string> = { freeTriangle: '◺', triangle: '▼', star6: '✡', square: '■', polygon: '✴', circle: '○', lotus: '❀', rays: '✳', lattice: '▲', arc: '◠', crescent: '☾', symbol: '卐', free: '✎', grid: '▦', sri: '✡' };
 
   return (
     <>
@@ -875,14 +951,15 @@ export function CentrePanel({ design, scene }: PanelProps) {
                   {f.type === 'polygon' && <PolygonControls f={f} unitMm={scene.unitMm} />}
                   {f.type === 'circle' && <CircleControls f={f} unitMm={scene.unitMm} />}
                   {f.type === 'grid' && <GridControls f={f} unitMm={scene.unitMm} />}
-                  {f.type === 'sri' && <SriControls f={f} unitMm={scene.unitMm} />}
+                  {f.type === 'sri' && <SriControls f={f} unitMm={scene.unitMm} design={design} />}
                   {f.type === 'lotus' && <LotusControls f={f} unitMm={scene.unitMm} />}
                   {f.type === 'rays' && <RaysControls f={f} unitMm={scene.unitMm} />}
                   {f.type === 'lattice' && <LatticeControls f={f} unitMm={scene.unitMm} />}
                   {f.type === 'arc' && <ArcControls f={f} unitMm={scene.unitMm} />}
                   {f.type === 'crescent' && <CrescentControls f={f} unitMm={scene.unitMm} />}
                   {f.type === 'symbol' && <SymbolControls f={f} unitMm={scene.unitMm} />}
-                  {f.type === 'free' && <FreeControls f={f} />}
+                  {f.type === 'free' && <FreeControls f={f} unitMm={scene.unitMm} />}
+                  {f.type === 'triangle' && <TriangleControls f={f} unitMm={scene.unitMm} extent={scene.extent} />}
                   {f.type === 'shape' && <ShapeFigureControls f={f} unitMm={scene.unitMm} />}
                 </div>
               )}
@@ -894,6 +971,8 @@ export function CentrePanel({ design, scene }: PanelProps) {
       <Group>
         <ButtonRow accent icon={<Icon name="plus" />} label={t('centre.add')} onClick={() => setAdding(true)} />
       </Group>
+
+      <CheckPanel design={design} scene={scene} />
 
       {hasSri ? (
         <>

@@ -31,7 +31,7 @@ export function App() {
   const hasDesign = useStudio((s) => s.design !== null);
   const lang = useLang();
   useEffect(() => {
-    document.documentElement.lang = lang === 'hi' ? 'hi' : 'en';
+    document.documentElement.lang = lang;
   }, [lang]);
   return (
     <>

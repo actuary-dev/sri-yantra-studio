@@ -1,5 +1,6 @@
 /** The editor screen: top bar, live canvas, panels (bottom sheets or inspector). */
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { angleAt, lineDirection } from '../core';
 import type { Design, Scene } from '../core/types';
 import { newId } from '../presets';
 import { Canvas, type Insets } from './Canvas';
@@ -140,6 +141,7 @@ export function Editor() {
   const panel = useEditorUI((s) => s.panel);
   const placeMode = useEditorUI((s) => s.placeMode);
   const drawId = useEditorUI((s) => s.drawFigureId);
+  const measure = useEditorUI((s) => s.measure);
   const pending = useEditorUI((s) => s.pending);
   const selectedId = useEditorUI((s) => s.selectedCustomId);
   const exportOpen = useEditorUI((s) => s.exportOpen);
@@ -163,7 +165,7 @@ export function Editor() {
   const invalid = !!built.scene && !built.scene.report.ok;
 
   const activePanel: PanelId | null = wide ? panel ?? 'shape' : panel;
-  const sheetOpen = !wide && panel !== null && !placeMode && !pending && !drawId && !arrangeOpen;
+  const sheetOpen = !wide && panel !== null && !placeMode && !pending && !drawId && !measure && !arrangeOpen;
 
   // warm up the export module in the background
   useEffect(() => {
@@ -171,7 +173,7 @@ export function Editor() {
     return () => clearTimeout(id);
   }, []);
 
-  useEffect(() => () => setEditorUI({ panel: null, placeMode: false, pending: null, selectedCustomId: null, drawFigureId: null, exportOpen: false, helpOpen: false, sel: [], multi: false, arrangeOpen: false, preview: null }), []);
+  useEffect(() => () => setEditorUI({ panel: null, placeMode: false, pending: null, selectedCustomId: null, drawFigureId: null, measure: null, exportOpen: false, helpOpen: false, sel: [], multi: false, arrangeOpen: false, preview: null }), []);
 
   // keyboard shortcuts: undo / redo, and working with the picked shapes
   useEffect(() => {
@@ -240,6 +242,17 @@ export function Editor() {
   const onTap = useCallback(
     (x: number, y: number, s: number) => {
       const ui = editorUI.getState();
+      if (ui.measure) {
+        // measuring: each tap takes the nearest exact corner or crossing when there is one close by
+        let near: { x: number; y: number; d: number } | null = null;
+        for (const a of anchors) {
+          const d = Math.hypot(a.x - x, a.y - y);
+          if (!near || d < near.d) near = { x: a.x, y: a.y, d };
+        }
+        const pt = near && near.d <= 20 / s ? { x: near.x, y: near.y } : { x, y };
+        setEditorUI({ measure: ui.measure.length >= 3 ? [pt] : [...ui.measure, pt] });
+        return;
+      }
       if (ui.drawFigureId) {
         // drawing a free shape: each tap adds a point, joining to a nearby corner or crossing when there is one
         let near: { x: number; y: number; d: number } | null = null;
@@ -247,11 +260,21 @@ export function Editor() {
           const d = Math.hypot(a.x - x, a.y - y);
           if (!near || d < near.d) near = { x: a.x, y: a.y, d };
         }
-        const pt = near && near.d <= 20 / s ? { x: near.x, y: near.y } : { x, y };
+        let pt = near && near.d <= 20 / s ? { x: near.x, y: near.y } : { x, y };
         const fid = ui.drawFigureId;
+        const snapDeg = ui.drawSnapDeg;
         studio.getState().update((d) => {
           const f = (d.centre ?? []).find((q) => q.id === fid);
-          if (f && f.type === 'free') f.points.push(pt);
+          if (!f || f.type !== 'free') return;
+          const last = f.points[f.points.length - 1];
+          if (last && snapDeg > 0 && !(near && near.d <= 20 / s)) {
+            // keep the new line on an exact multiple of the chosen angle, at the length that was tapped
+            const len = Math.hypot(pt.x - last.x, pt.y - last.y);
+            const step = (snapDeg * Math.PI) / 180;
+            const a = Math.round(Math.atan2(pt.y - last.y, pt.x - last.x) / step) * step;
+            pt = { x: last.x + len * Math.cos(a), y: last.y + len * Math.sin(a) };
+          }
+          f.points.push(pt);
         });
         return;
       }
@@ -326,10 +349,16 @@ export function Editor() {
     (s: number) => (
       <g className="overlay">
         {tools.overlay(s)}
-        {(placeMode || drawId) &&
+        {(placeMode || drawId || measure) &&
           anchors.map((a) => (
-            <circle key={a.id} cx={a.x} cy={a.y} r={(drawId ? 3.5 : 5) / s} fill="var(--accent)" stroke="#fff" strokeWidth={1.5 / s} opacity={drawId ? 0.55 : 0.9} />
+            <circle key={a.id} cx={a.x} cy={a.y} r={(placeMode ? 5 : 3.5) / s} fill="var(--accent)" stroke="#fff" strokeWidth={1.5 / s} opacity={placeMode ? 0.9 : 0.55} />
           ))}
+        {measure && measure.length > 1 && (
+          <polyline points={measure.map((q) => `${q.x},${q.y}`).join(' ')} fill="none" stroke="#e67e22" strokeWidth={2.5 / s} strokeLinejoin="round" />
+        )}
+        {measure?.map((q, i) => (
+          <circle key={`mp${i}`} cx={q.x} cy={q.y} r={6 / s} fill="#fff" stroke="#e67e22" strokeWidth={2.5 / s} />
+        ))}
         {drawPoints.map((q, i) => (
           <circle key={`dp${i}`} cx={q.x} cy={q.y} r={6 / s} fill="#fff" stroke="var(--accent)" strokeWidth={2.5 / s} />
         ))}
@@ -346,7 +375,7 @@ export function Editor() {
         )}
       </g>
     ),
-    [placeMode, drawId, drawPoints, anchors, selected, unitMm, tools],
+    [placeMode, drawId, measure, drawPoints, anchors, selected, unitMm, tools],
   );
 
   const toggleText = () => {
@@ -358,8 +387,24 @@ export function Editor() {
   };
 
   const onTab = (id: PanelId) => {
-    setEditorUI({ panel: panel === id ? null : id, placeMode: false, drawFigureId: null });
+    setEditorUI({ panel: panel === id ? null : id, placeMode: false, drawFigureId: null, measure: null });
   };
+
+  // what the measuring tool reads: a position, a length with its slope, or an angle between two lengths
+  const mmN = (v: number, digits = 2) => (v * unitMm).toFixed(digits);
+  const measureText = !measure
+    ? ''
+    : measure.length === 0
+      ? t('measure.banner')
+      : measure.length === 1
+        ? t('measure.point', { x: mmN(measure[0].x), y: mmN(-measure[0].y), r: mmN(Math.hypot(measure[0].x, measure[0].y)) })
+        : measure.length === 2
+          ? t('measure.length', { len: mmN(Math.hypot(measure[1].x - measure[0].x, measure[1].y - measure[0].y), 3), dir: lineDirection(measure[0], measure[1]).toFixed(3) })
+          : t('measure.angle', {
+              deg: angleAt(measure[1], measure[0], measure[2]).toFixed(3),
+              a: mmN(Math.hypot(measure[1].x - measure[0].x, measure[1].y - measure[0].y)),
+              b: mmN(Math.hypot(measure[2].x - measure[1].x, measure[2].y - measure[1].y)),
+            });
 
   return (
     <div className={`editor${wide ? ' editor--wide' : ''}`}>
@@ -423,6 +468,16 @@ export function Editor() {
                   </button>
                   <button
                     type="button"
+                    className={`float-btn float-btn--round${measure ? ' is-on' : ''}`}
+                    onClick={() => setEditorUI({ measure: measure ? null : [], placeMode: false, drawFigureId: null })}
+                    aria-pressed={!!measure}
+                    aria-label={t('measure.open')}
+                    title={t('measure.open')}
+                  >
+                    <Icon name="ruler" size={20} />
+                  </button>
+                  <button
+                    type="button"
                     className={`float-btn float-btn--round${snapOn ? ' is-on' : ''}`}
                     onClick={() => {
                       studio.getState().setSnap(!snapOn);
@@ -445,7 +500,7 @@ export function Editor() {
           </div>
         )}
 
-        {(invalid || placeMode || drawId || (toolsActive && selCount > 0 && !sheetOpen) || tools.hudText) && (
+        {(invalid || placeMode || drawId || measure || (toolsActive && selCount > 0 && !sheetOpen) || tools.hudText) && (
           <div className="canvas-banners" style={{ top: topH + 8 }}>
             {toolsActive && selCount > 0 && !tools.hudText && !sheetOpen && (
               <SelectionBar design={design} nearMisses={tools.nearMisses} onFix={tools.fixNow} onEdit={() => setEditorUI({ panel: 'shape', arrangeOpen: false })} />
@@ -459,6 +514,18 @@ export function Editor() {
               <div className="banner banner--warn" role="status">
                 <Icon name="warn" size={20} />
                 <span>{t('shape.invalid')}</span>
+              </div>
+            )}
+            {measure && (
+              <div className="banner banner--accent banner--measure" role="status">
+                <Icon name="ruler" size={20} />
+                <span>{measureText}</span>
+                <button type="button" className="text-btn" disabled={measure.length === 0} onClick={() => setEditorUI({ measure: [] })}>
+                  {t('measure.clear')}
+                </button>
+                <button type="button" className="text-btn" onClick={() => setEditorUI({ measure: null })}>
+                  {t('common.done')}
+                </button>
               </div>
             )}
             {drawId && (

@@ -9,3 +9,7 @@ export type { Solved } from './solver';
 export { buildFigure } from './arrangement';
 export type { Figure, Cell, Pt, BigTriangle } from './arrangement';
 export * from './shape';
+export { trianglePoints, triangleMetrics, shapeFromApexAngle, shapeFromBaseAngles, shapeFromSides, sriAsTriangles, APEX_ANGLES } from './triangle';
+export type { TriangleMetrics, TriangleKind, TriangleShape } from './triangle';
+export { analyse, angleAt, bearing, lineDirection, EXACT, NEAR } from './analyse';
+export type { Precision, NearMiss, NearMissKind, Symmetry } from './analyse';

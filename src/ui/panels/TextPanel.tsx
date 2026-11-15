@@ -266,6 +266,7 @@ function defaultTarget(kind: LabelKind, bands: Band[]): string | null {
 function AddLabelsSheet({ open, onClose, bands }: { open: boolean; onClose(): void; bands: Band[] }) {
   const t = useT();
   const lang = useLang();
+  const kindName = (k: LabelKind) => (lang === 'hi' ? k.nameHi : k.name);
   const [kind, setKind] = useState<LabelKind | null>(null);
   const [target, setTarget] = useState<string | null>(null);
   const kinds = (() => {
@@ -287,7 +288,7 @@ function AddLabelsSheet({ open, onClose, bands }: { open: boolean; onClose(): vo
         d.text.visible = true;
         d.text.sets.push(set);
       });
-      showToast(t('text.added', { name: lang === 'hi' ? k.nameHi : k.name }), 'success');
+      showToast(t('text.added', { name: kindName(k) }), 'success');
       close();
     } catch (e) {
       console.error(e);
@@ -309,7 +310,7 @@ function AddLabelsSheet({ open, onClose, bands }: { open: boolean; onClose(): vo
       modal
       detents={[0.88]}
       label={t('text.addLabels')}
-      title={kind ? (lang === 'hi' ? kind.nameHi : kind.name) : t('text.addLabels')}
+      title={kind ? kindName(kind) : t('text.addLabels')}
       headerLeft={
         kind ? (
           <button type="button" className="text-btn" onClick={() => setKind(null)}>
@@ -331,8 +332,8 @@ function AddLabelsSheet({ open, onClose, bands }: { open: boolean; onClose(): vo
               {kinds.map((k) => (
                 <ButtonRow
                   key={k.kind}
-                  label={lang === 'hi' ? k.nameHi : k.name}
-                  sub={lang === 'hi' ? k.name : k.description}
+                  label={kindName(k)}
+                  sub={lang === 'en' ? k.description : k.name}
                   chevron
                   onClick={() => choose(k)}
                 />

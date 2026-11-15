@@ -405,6 +405,42 @@ export interface FreeFigure extends FigureBase {
   fill: string | null;
 }
 
+/** Which point of a triangle is pinned to its (x, y) position. */
+export type TrianglePivot = 'centroid' | 'incentre' | 'circumcentre' | 'base' | 'apex';
+
+/**
+ * A triangle of any shape, anywhere: equilateral, isosceles, right-angled or scalene.
+ * Described the way a draughtsman lays it out: a base, a height, and how far the apex
+ * stands off the middle of the base.
+ */
+export interface TriangleFigure extends FigureBase {
+  type: 'triangle';
+  /** shown in the list instead of the generic name (e.g. the nine triangles of a separated Sri Yantra) */
+  label?: string;
+  /** length of the base, scene units */
+  base: number;
+  /** distance from the base to the apex, scene units */
+  height: number;
+  /**
+   * where the apex stands along the base, in half-bases from the middle:
+   * 0 = over the middle (isosceles) · ±1 = over a base corner (right-angled) · beyond ±1 = obtuse
+   */
+  skew: number;
+  /** which point of the triangle sits at (x, y) */
+  pivot: TrianglePivot;
+  /** scene units; the yantra's centre is (0, 0), y grows downward */
+  x: number;
+  y: number;
+  /** 0 = apex straight up; degrees clockwise (180 = apex down) */
+  rotationDeg: number;
+  lineMm: number;
+  /** parallel inner outlines, 1–3 */
+  lines: number;
+  lineGapMm: number;
+  fill: string | null;
+  orbit?: Orbit;
+}
+
 /**
  * What stays true while a shape is dragged or typed into:
  *  'equilateral' — all sides equal · 'isosceles' — two equal sides, apex over the base's middle ·
@@ -442,7 +478,7 @@ export interface ShapeFigure extends FigureBase {
 
 export type CentreFigure =
   | SriFigure | PolygonFigure | CircleFigure | GridFigure | LotusFigure | RaysFigure | LatticeFigure
-  | ArcFigure | CrescentFigure | SymbolFigure | FreeFigure | ShapeFigure;
+  | ArcFigure | CrescentFigure | SymbolFigure | FreeFigure | TriangleFigure | ShapeFigure;
 
 export type Orient = 'upright' | 'radial' | 'tangent' | 'fixed';
 
@@ -530,12 +566,28 @@ export interface Design {
     insets: number;
     insetGapMm: number;
   };
-  bindu: { visible: boolean; /** scene units */ radius: number; style: 'dot' | 'ring' | 'ringdot' };
+  bindu: {
+    visible: boolean;
+    /** scene units */
+    radius: number;
+    style: 'dot' | 'ring' | 'ringdot';
+    /** fixed place of the bindu, scene units; when absent it sits at the heart of the Sri Yantra, or at the centre */
+    x?: number;
+    y?: number;
+  };
   /** ordered from the triangle circle outwards */
   bands: Band[];
   text: TextSpec;
   style: { ink: string; paper: string };
-  guides: { marma: boolean; sandhi: boolean; axes: boolean };
+  guides: {
+    marma: boolean;
+    sandhi: boolean;
+    axes: boolean;
+    /** guide lines from the centre every this many degrees (0 or absent = none) */
+    radialDeg?: number;
+    /** ring every place where lines or corners nearly, but not exactly, meet */
+    checks?: boolean;
+  };
 }
 
 /* ------------------------------------------------------------------ scene */
@@ -572,6 +624,13 @@ export interface GeometryReport {
   triangles: TriangleInfo[];
 }
 
+export interface SceneLine {
+  a: { x: number; y: number };
+  b: { x: number; y: number };
+  /** id of the figure the line belongs to */
+  owner: string;
+}
+
 export interface Scene {
   /** drawing order: first = bottom */
   prims: Prim[];
@@ -581,6 +640,10 @@ export interface Scene {
   unitMm: number;
   anchors: Anchor[];
   report: GeometryReport;
+  /** every straight line of the centre figures, for measuring and checking (scene units) */
+  lines: SceneLine[];
+  /** every circle of the centre figures and plain circle bands */
+  rounds: { x: number; y: number; r: number }[];
   ink: string;
   paper: string;
 }

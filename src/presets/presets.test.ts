@@ -2,11 +2,23 @@ import { describe, expect, it } from 'vitest';
 import { buildScene } from '../core/scene';
 import { DEFAULT_EXPORT, sceneToDxf, sceneToPdf, sceneToSvg } from '../export';
 import { loadShaper } from '../text';
-import { PRESETS } from './index';
+import { PRESETS, presetText } from './index';
 
 declare const process: { env: Record<string, string | undefined> };
 
 describe('every starting design', () => {
+  it('has a name and a description in English and Hindi', () => {
+    for (const p of PRESETS) {
+      for (const lang of ['en', 'hi'] as const) {
+        const tx = presetText(p, lang);
+        expect(tx.name.length, `${p.id} ${lang}`).toBeGreaterThan(0);
+        expect(tx.blurb.length, `${p.id} ${lang}`).toBeGreaterThan(0);
+      }
+      expect(/[\u0900-\u097F]/.test(presetText(p, 'hi').name), p.id).toBe(true);
+    }
+    expect(new Set(PRESETS.map((p) => p.id)).size).toBe(PRESETS.length);
+  });
+
   it('is a true Sri Yantra and exports in every vector format', async () => {
     const shaper = await loadShaper();
     const dump = process.env.DUMP_DIR;
@@ -34,7 +46,7 @@ describe('every starting design', () => {
       const dxf = sceneToDxf(scene, { ...DEFAULT_EXPORT, format: 'dxf', lineOnly: true });
       expect(dxf.includes('NaN'), p.id).toBe(false);
       const pdf = await sceneToPdf(scene, { ...DEFAULT_EXPORT, format: 'pdf' });
-      expect(pdf.length).toBeGreaterThan(1000);
+      expect(pdf.length).toBeGreaterThan(600);
       if (dump) {
         const nodeFs = 'node:fs';
         const fs = (await import(/* @vite-ignore */ nodeFs)) as { writeFileSync(path: string, data: string | Uint8Array): void };

@@ -60,6 +60,10 @@ interface EditorUIState {
   selectedCustomId: string | null;
   /** id of the free shape that canvas taps are adding points to */
   drawFigureId: string | null;
+  /** while drawing a free shape: keep each new line on a multiple of this many degrees (0 = off) */
+  drawSnapDeg: number;
+  /** points tapped with the measuring tool (scene units); null = the tool is off */
+  measure: { x: number; y: number }[] | null;
   exportOpen: boolean;
   helpOpen: boolean;
   /** centre figures picked on the canvas or in the list */
@@ -78,6 +82,8 @@ export const editorUI = createStore<EditorUIState>()(() => ({
   pending: null,
   selectedCustomId: null,
   drawFigureId: null,
+  drawSnapDeg: 0,
+  measure: null,
   exportOpen: false,
   helpOpen: false,
   sel: [],

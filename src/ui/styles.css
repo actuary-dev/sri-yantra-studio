@@ -816,7 +816,7 @@ textarea.text-input {
 }
 
 .gallery-bar .segmented {
-  width: 150px;
+  width: 170px;
 }
 
 .gallery-main {
@@ -1941,11 +1941,33 @@ button.card:active,
   position: relative;
   z-index: 1;
   width: min(560px, 100%);
-  padding: 8px calc(8px + var(--safe-r)) calc(8px + var(--safe-b)) calc(8px + var(--safe-l));
+  /* never taller than the screen: the list scrolls, Cancel stays put */
+  max-height: 100vh;
+  max-height: 100dvh;
+  padding: calc(8px + var(--safe-t)) calc(8px + var(--safe-r)) calc(8px + var(--safe-b)) calc(8px + var(--safe-l));
   display: flex;
   flex-direction: column;
   gap: 8px;
   animation: sheet-in 0.32s var(--ease);
+}
+
+.action-sheet .action-group {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.action-sheet .action-cancel {
+  flex: 0 0 auto;
+}
+
+@media (max-height: 560px) {
+  .action-btn {
+    min-height: 48px;
+    font-size: 17px;
+  }
 }
 
 .action-group {
@@ -2338,4 +2360,48 @@ button.card:active,
   background: color-mix(in srgb, var(--accent) 8%, transparent);
   pointer-events: none;
   z-index: 50;
+/* exact number entry: triangles, free-shape points */
+
+.num-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 8px 0 4px;
+}
+
+.num-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--label-2);
+}
+
+.num-grid .numfield input {
+  width: 100%;
+  min-width: 0;
+}
+
+.num-grid .numfield {
+  min-width: 0;
+}
+
+.num-grid--point {
+  grid-template-columns: 26px minmax(0, 1fr) minmax(0, 1fr) 74px;
+  align-items: center;
+  margin: 6px 0;
+}
+
+.row-hint.is-warn {
+  color: var(--red, #c0392b);
+}
+
+.banner--measure {
+  flex-wrap: wrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.float-btn.is-on {
+  background: var(--accent);
+  color: #fff;
 }

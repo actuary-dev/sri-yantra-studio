@@ -1,7 +1,7 @@
 /** Home screen: starting designs and the user's saved yantras. */
 import { memo, useState } from 'react';
 import type { Design } from '../core/types';
-import { PRESETS, type Preset } from '../presets';
+import { PRESETS, PRESET_CATEGORIES, presetText, type Preset } from '../presets';
 import { YantraView } from './YantraView';
 import { useThumbScene, dropThumbs } from './thumbs';
 import { studio, useStudio } from './store';
@@ -81,7 +81,7 @@ export function Gallery() {
 
   const fmtDate = (ms: number) => {
     try {
-      return new Date(ms).toLocaleDateString(lang === 'hi' ? 'hi-IN' : undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+      return new Date(ms).toLocaleDateString(lang === 'en' ? undefined : 'hi-IN', { day: 'numeric', month: 'short', year: 'numeric' });
     } catch {
       return new Date(ms).toDateString();
     }
@@ -150,18 +150,18 @@ export function Gallery() {
         {tab === 'designs' ? (
           <>
             <p className="gallery-intro">{t('gallery.intro')}</p>
-            {(['forms', 'mahavidya', 'chakras', 'numbers', 'sri'] as const).map((cat) => (
+            {PRESET_CATEGORIES.map((cat) => (
               <section key={cat} aria-label={t(`gallery.cat.${cat}`)}>
                 <h2 className="group-title" style={{ margin: '22px 4px 10px', fontSize: 15 }}>{t(`gallery.cat.${cat}`)}</h2>
                 <div className="card-grid">
                   {PRESETS.filter((p) => p.category === cat).map((p) => {
-                    const name = lang === 'hi' ? p.nameHi : p.name;
+                    const { name, blurb } = presetText(p, lang);
                     return (
                       <button key={p.id} type="button" className="card" onClick={() => openPreset(p, t('error.preset'))}>
                         <Thumb thumbKey={`preset:${p.id}`} make={p.make} alt={name} />
                         <span className="card-text">
                           <span className="card-title">{name}</span>
-                          <span className="card-sub">{lang === 'hi' ? p.blurbHi : p.blurb}</span>
+                          <span className="card-sub">{blurb}</span>
                         </span>
                       </button>
                     );

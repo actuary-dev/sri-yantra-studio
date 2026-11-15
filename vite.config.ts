@@ -12,7 +12,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['fonts/*.ttf', 'icon.svg'],
-      workbox: { globPatterns: ['**/*.{js,css,html,svg,png,ttf,wasm,woff2}'], maximumFileSizeToCacheInBytes: 8 * 1024 * 1024 },
+      workbox: { skipWaiting: true, clientsClaim: true, cleanupOutdatedCaches: true, globPatterns: ['**/*.{js,css,html,svg,png,ttf,wasm,woff2}'], maximumFileSizeToCacheInBytes: 8 * 1024 * 1024 },
       manifest: {
         name: 'Yantra Studio',
         short_name: 'Yantra',

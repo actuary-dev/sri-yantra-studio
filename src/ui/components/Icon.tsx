@@ -31,6 +31,7 @@ export type IconName =
   | 'bandText'
   | 'bandBhupura'
   | 'pin'
+  | 'ruler'
   | 'pencil'
   | 'reset'
   | 'yantra'
@@ -247,6 +248,12 @@ const P: Record<IconName, ReactNode> = {
   ),
   bandBhupura: (
     <path d="M9.5 3.5h5v2.5h3.5v3.5h2.5v5H18v3.5h-3.5v2.5h-5V18H6v-3.5H3.5v-5H6V6h3.5V3.5Z" />
+  ),
+  ruler: (
+    <>
+      <path d="M3.5 16.5 16.5 3.5l4 4-13 13Z" />
+      <path d="m7.5 12.5 1.6 1.6M10.5 9.5l1.6 1.6M13.5 6.5l1.6 1.6" />
+    </>
   ),
   pin: (
     <>
