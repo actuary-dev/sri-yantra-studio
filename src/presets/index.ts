@@ -3,7 +3,7 @@
  */
 import type {
   ArcFigure, Band, BhupuraBand, CircleBand, CircleFigure, CrescentFigure, CustomLabel, Design, FreeFigure, SymbolFigure, SymbolName, BeadBand, GridFigure, LabelSet, LatticeFigure, LotusBand, LotusFigure,
-  PolygonFigure, RaysFigure, SriFigure, TextRingBand,
+  PolygonFigure, RaysFigure, ShapeFigure, ShapeLock, SriFigure, TextRingBand,
 } from '../core/types';
 import { createLabelSet, toDevanagariNumber } from '../text';
 
@@ -69,6 +69,13 @@ export const symbolFigure = (id: string, symbol: SymbolName, p: Partial<SymbolFi
 });
 export const freeFigure = (id: string, points: [number, number][], p: Partial<FreeFigure> = {}): FreeFigure => ({
   id, type: 'free', visible: true, points: points.map(([x, y]) => ({ x, y })), closed: true, repeat: 1, lineMm: 0.5, fill: null, ...p,
+});
+
+/** A free triangle or square: `size` is the base width; equilateral and square locks set the height themselves. */
+export const shapeFigure = (id: string, lock: ShapeLock, size: number, p: Partial<ShapeFigure> = {}): ShapeFigure => ({
+  id, type: 'shape', visible: true, lock, x: 0, y: 0, w: size,
+  h: lock === 'equilateral' ? (size * Math.sqrt(3)) / 2 : lock === 'square' ? size : size * 0.8,
+  skew: lock === 'right' ? -0.5 : 0, rotationDeg: 0, lineMm: 0.5, lines: 1, lineGapMm: 1.2, rows: 1, fill: null, ...p,
 });
 
 /** A ready-filled label set on any group of places. */

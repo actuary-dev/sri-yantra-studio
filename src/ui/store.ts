@@ -16,6 +16,8 @@ export interface Settings {
   exportOptions: ExportOptions | null;
   /** "Type in English letters" helper on by default */
   translit: boolean;
+  /** dragged corners and shapes jump onto corners, crossings, lines and circles */
+  snap: boolean;
 }
 
 export interface KVStorage {
@@ -61,6 +63,9 @@ export interface StudioState {
   setLang(lang: Lang): void;
   setExportOptions(opts: ExportOptions): void;
   setTranslit(on: boolean): void;
+  setSnap(on: boolean): void;
+  /** add designs read from a file; returns how many were added */
+  importDesigns(list: unknown[]): Design[];
 }
 
 export interface StudioStoreOptions {
@@ -74,9 +79,9 @@ export type StudioStore = StoreApi<StudioState> & {
   flush(): void;
 };
 
-const DEFAULT_SETTINGS: Settings = { lang: 'en', exportOptions: null, translit: false };
+const DEFAULT_SETTINGS: Settings = { lang: 'en', exportOptions: null, translit: false, snap: true };
 
-function isDesign(v: unknown): v is Design {
+export function isDesign(v: unknown): v is Design {
   if (!v || typeof v !== 'object') return false;
   const d = v as Partial<Design>;
   return (
@@ -135,6 +140,7 @@ export function loadSettings(storage: KVStorage | null): Settings {
     lang: s.lang === 'hi' ? 'hi' : 'en',
     exportOptions: s.exportOptions && typeof s.exportOptions === 'object' ? s.exportOptions : null,
     translit: s.translit === true,
+    snap: s.snap !== false,
   };
 }
 
@@ -302,6 +308,39 @@ export function createStudioStore(options: StudioStoreOptions = {}): StudioStore
         const settings = { ...get().settings, translit };
         set({ settings });
         persistSettings(settings);
+      },
+
+      setSnap(snap) {
+        const settings = { ...get().settings, snap };
+        set({ settings });
+        persistSettings(settings);
+      },
+
+      importDesigns(list) {
+        save();
+        const t = now();
+        const lib = get().library;
+        const added: Design[] = [];
+        for (const raw of list) {
+          if (!isDesign(raw)) continue;
+          const d = clone(raw);
+          if (!Array.isArray(d.centre)) d.centre = [{ id: 'sri', type: 'sri', visible: true, radius: 1 }];
+          const same = lib.find((x) => x.id === d.id) ?? added.find((x) => x.id === d.id);
+          if (same) {
+            // never overwrite: an identical copy is skipped, a different one is kept beside it
+            if (JSON.stringify({ ...same, updatedAt: 0 }) === JSON.stringify({ ...d, updatedAt: 0 })) continue;
+            d.id = `d${t.toString(36)}${Math.floor(Math.random() * 1e8).toString(36)}${added.length}`;
+            d.name = `${d.name} (2)`;
+          }
+          d.updatedAt = t;
+          added.push(d);
+        }
+        if (added.length) {
+          const next = [...added, ...lib];
+          set({ library: next });
+          persistLibrary(next);
+        }
+        return added;
       },
     };
   });

@@ -33,9 +33,82 @@ export type IconName =
   | 'pin'
   | 'pencil'
   | 'reset'
-  | 'yantra';
+  | 'yantra'
+  | 'rotateL'
+  | 'rotateR'
+  | 'flip'
+  | 'mirror'
+  | 'copies'
+  | 'copy'
+  | 'magnet'
+  | 'multi'
+  | 'upload'
+  | 'download';
 
 const P: Record<IconName, ReactNode> = {
+  rotateL: (
+    <>
+      <path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3" />
+      <path d="M4 4.5v4.2h4.2" />
+    </>
+  ),
+  rotateR: (
+    <>
+      <path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3" />
+      <path d="M20 4.5v4.2h-4.2" />
+    </>
+  ),
+  flip: (
+    <>
+      <path d="M12 3.5 19 10H5l7-6.5Z" />
+      <path d="M12 20.5 5 14h14l-7 6.5Z" strokeDasharray="2.2 2" />
+    </>
+  ),
+  mirror: (
+    <>
+      <path d="M12 3v18" strokeDasharray="2 2" />
+      <path d="M9 6 3.5 18H9V6Z" />
+      <path d="M15 6l5.5 12H15V6Z" />
+    </>
+  ),
+  copies: (
+    <>
+      <path d="M12 3.5 16 10H8l4-6.5Z" />
+      <path d="M20.5 12 14 16v-8l6.5 4Z" />
+      <path d="M12 20.5 8 14h8l-4 6.5Z" />
+      <path d="M3.5 12 10 8v8l-6.5-4Z" />
+    </>
+  ),
+  copy: (
+    <>
+      <rect x="8.5" y="8.5" width="11" height="11" rx="2" />
+      <path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5" />
+    </>
+  ),
+  magnet: (
+    <>
+      <path d="M6 4v8a6 6 0 0 0 12 0V4h-4v8a2 2 0 0 1-4 0V4H6Z" />
+      <path d="M6 8h4M14 8h4" />
+    </>
+  ),
+  multi: (
+    <>
+      <rect x="3.5" y="3.5" width="9" height="9" rx="1.5" />
+      <rect x="11.5" y="11.5" width="9" height="9" rx="1.5" strokeDasharray="2.2 2" />
+    </>
+  ),
+  upload: (
+    <>
+      <path d="M12 15V4M7.5 8.5 12 4l4.5 4.5" />
+      <path d="M4.5 14.5v4a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5v-4" />
+    </>
+  ),
+  download: (
+    <>
+      <path d="M12 4v11M7.5 10.5 12 15l4.5-4.5" />
+      <path d="M4.5 14.5v4a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5v-4" />
+    </>
+  ),
   back: <path d="M15 4.5 7.5 12l7.5 7.5" />,
   undo: (
     <>

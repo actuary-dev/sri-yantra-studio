@@ -8,3 +8,4 @@ export { solveGeometry, solveFree, validRange, GOAL_SOLVES, TRI, TRI_NAMES, TRI_
 export type { Solved } from './solver';
 export { buildFigure } from './arrangement';
 export type { Figure, Cell, Pt, BigTriangle } from './arrangement';
+export * from './shape';

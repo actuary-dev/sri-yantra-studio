@@ -405,9 +405,44 @@ export interface FreeFigure extends FigureBase {
   fill: string | null;
 }
 
+/**
+ * What stays true while a shape is dragged or typed into:
+ *  'equilateral' — all sides equal · 'isosceles' — two equal sides, apex over the base's middle ·
+ *  'right' — right angle under the apex · 'free' — any triangle · 'square' · 'rect' — rectangle.
+ */
+export type ShapeLock = 'equilateral' | 'isosceles' | 'right' | 'free' | 'square' | 'rect';
+
+/**
+ * A triangle or four-sided shape that can sit anywhere, at any angle.
+ * In its own frame (rotation 0) a triangle has its apex up and its base horizontal:
+ *   apex (skew·w, −h/2), base corners (−w/2, h/2) and (w/2, h/2).
+ * A square/rectangle has corners (±w/2, ±h/2). (x, y) is the middle of that box.
+ */
+export interface ShapeFigure extends FigureBase {
+  type: 'shape';
+  lock: ShapeLock;
+  x: number;
+  y: number;
+  /** base width, scene units */
+  w: number;
+  /** height (apex to base), scene units */
+  h: number;
+  /** triangles: where the apex sits over the base, −0.5 = over the left corner, 0 = middle, 0.5 = over the right corner */
+  skew: number;
+  /** 0 = apex straight up; degrees clockwise */
+  rotationDeg: number;
+  lineMm: number;
+  /** parallel inner outlines, 1–3 */
+  lines: number;
+  lineGapMm: number;
+  /** triangles: divide into rows of small triangles (1 = whole) */
+  rows: number;
+  fill: string | null;
+}
+
 export type CentreFigure =
   | SriFigure | PolygonFigure | CircleFigure | GridFigure | LotusFigure | RaysFigure | LatticeFigure
-  | ArcFigure | CrescentFigure | SymbolFigure | FreeFigure;
+  | ArcFigure | CrescentFigure | SymbolFigure | FreeFigure | ShapeFigure;
 
 export type Orient = 'upright' | 'radial' | 'tangent' | 'fixed';
 

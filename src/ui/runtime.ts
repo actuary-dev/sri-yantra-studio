@@ -62,6 +62,14 @@ interface EditorUIState {
   drawFigureId: string | null;
   exportOpen: boolean;
   helpOpen: boolean;
+  /** centre figures picked on the canvas or in the list */
+  sel: string[];
+  /** taps add to / remove from the selection instead of replacing it */
+  multi: boolean;
+  /** the "copies" sheet is open */
+  arrangeOpen: boolean;
+  /** outlines of copies about to be made, drawn faintly on the canvas */
+  preview: import('../core/types').ShapeFigure[] | null;
 }
 
 export const editorUI = createStore<EditorUIState>()(() => ({
@@ -72,7 +80,14 @@ export const editorUI = createStore<EditorUIState>()(() => ({
   drawFigureId: null,
   exportOpen: false,
   helpOpen: false,
+  sel: [],
+  multi: false,
+  arrangeOpen: false,
+  preview: null,
 }));
+
+/** Figures copied with Ctrl+C / Copy, kept while the app is open (also across designs). */
+export const clipboard: { figures: import('../core/types').CentreFigure[] } = { figures: [] };
 
 export function useEditorUI<T>(sel: (s: EditorUIState) => T): T {
   return useStore(editorUI, sel);

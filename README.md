@@ -10,7 +10,7 @@ engraving (DXF, SVG) and large-format printing (PDF, PNG).
 * **Text:** Sanskrit letters and numbers at every crossing, in every enclosed space, on
   every petal, or anywhere you tap — each with its own size and angle. One button hides it all.
 
-Live: https://radical-anarchist.github.io/sri-yantra-studio/
+Live: https://actuary-dev.github.io/sri-yantra-studio/
 
 ## Run it
 

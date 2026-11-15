@@ -12,6 +12,7 @@ import { Segmented } from './components/Segmented';
 import { Switch } from './components/Switch';
 import { Stepper } from './components/Stepper';
 import { Icon } from './components/Icon';
+import { saveDesignFile } from './files';
 
 type ExportModule = typeof import('../export');
 
@@ -214,6 +215,23 @@ function ExportSheetInner({ open, onClose, design, scene, mod }: ExportSheetProp
               </span>
             </button>
           ))}
+          <button
+            type="button"
+            className="format-row"
+            onClick={() => {
+              studio.getState().saveNow();
+              saveDesignFile(studio.getState().design ?? design)
+                .then(() => showToast(t('file.saved', { name: design.name }), 'success'))
+                .catch((e: unknown) => showToast(t('export.failed', { msg: String(e) }), 'error'));
+            }}
+          >
+            <span className="format-badge">{'{ }'}</span>
+            <span className="row-text">
+              <span className="row-label">{t('export.designFile')}</span>
+              <span className="row-sub">{t('export.designFileSub')}</span>
+            </span>
+            <Icon name="download" size={20} />
+          </button>
         </Group>
 
         <Group title={t('export.sheet')}>

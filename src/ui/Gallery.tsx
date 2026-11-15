@@ -12,6 +12,26 @@ import { Icon } from './components/Icon';
 import { ActionSheet } from './components/ActionSheet';
 import { PromptDialog } from './components/PromptDialog';
 import { HelpSheet } from './HelpSheet';
+import { pickDesignFiles, readDesignFiles, saveBackupFile, saveDesignFile } from './files';
+import type { TFn } from './i18n';
+
+/** Add designs from files and say what happened. */
+export async function importFrom(read: Promise<unknown[]>, t: TFn, onAdded?: () => void) {
+  try {
+    const list = await read;
+    if (!list.length) {
+      showToast(t('file.importNone'), 'error');
+      return;
+    }
+    const added = studio.getState().importDesigns(list);
+    if (added.length) {
+      showToast(t('file.imported', { n: added.length }), 'success');
+      onAdded?.();
+    } else showToast(t('file.importSame'), 'info');
+  } catch (e) {
+    showToast(t('file.importFailed', { msg: e instanceof Error ? e.message : String(e) }), 'error', 6000);
+  }
+}
 
 const Thumb = memo(function Thumb({ thumbKey, make, alt }: { thumbKey: string; make: () => Design; alt: string }) {
   const entry = useThumbScene(thumbKey, make);
@@ -48,6 +68,16 @@ export function Gallery() {
   const [confirmDelete, setConfirmDelete] = useState<Design | null>(null);
   const [renaming, setRenaming] = useState<Design | null>(null);
   const [help, setHelp] = useState(false);
+  const [dropping, setDropping] = useState(false);
+  const doImport = (read: Promise<unknown[]>) => importFrom(read, t, () => setTab('mine'));
+  const saveFile = async (d: Design) => {
+    try {
+      await saveDesignFile(d);
+      showToast(t('file.saved', { name: d.name }), 'success');
+    } catch (e) {
+      showToast(t('file.importFailed', { msg: String(e) }), 'error');
+    }
+  };
 
   const fmtDate = (ms: number) => {
     try {
@@ -58,7 +88,25 @@ export function Gallery() {
   };
 
   return (
-    <div className="gallery">
+    <div
+      className={`gallery${dropping ? ' is-dropping' : ''}`}
+      data-drop={t('file.drop')}
+      onDragOver={(e) => {
+        if (e.dataTransfer?.types?.includes('Files')) {
+          e.preventDefault();
+          setDropping(true);
+        }
+      }}
+      onDragLeave={(e) => {
+        if (e.currentTarget === e.target) setDropping(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDropping(false);
+        const files = [...(e.dataTransfer?.files ?? [])];
+        if (files.length) void doImport(readDesignFiles(files));
+      }}
+    >
       <header className="gallery-bar">
         <Segmented
           size="small"
@@ -70,9 +118,14 @@ export function Gallery() {
             { value: 'hi', label: 'हिन्दी', aria: 'हिन्दी' },
           ]}
         />
-        <button type="button" className="icon-btn" onClick={() => setHelp(true)} aria-label={t('help.open')}>
-          <Icon name="help" />
-        </button>
+        <div className="inline-controls">
+          <button type="button" className="icon-btn" onClick={() => void doImport(pickDesignFiles())} aria-label={t('file.import')} title={t('file.import')}>
+            <Icon name="upload" />
+          </button>
+          <button type="button" className="icon-btn" onClick={() => setHelp(true)} aria-label={t('help.open')}>
+            <Icon name="help" />
+          </button>
+        </div>
       </header>
 
       <main className="gallery-main">
@@ -125,8 +178,25 @@ export function Gallery() {
             <button type="button" className="btn btn--tinted" onClick={() => setTab('designs')}>
               {t('mine.browse')}
             </button>
+            <button type="button" className="text-btn" onClick={() => void doImport(pickDesignFiles())}>
+              <Icon name="upload" size={20} /> {t('file.import')}
+            </button>
           </div>
         ) : (
+          <>
+          <div className="gallery-files">
+            <button type="button" className="pill-btn" onClick={() => void doImport(pickDesignFiles())}>
+              <Icon name="upload" size={18} /> {t('file.import')}
+            </button>
+            <button
+              type="button"
+              className="pill-btn"
+              title={t('file.backupSub')}
+              onClick={() => saveBackupFile(library).then(() => showToast(t('file.backupSub'), 'success', 4000)).catch(() => undefined)}
+            >
+              <Icon name="download" size={18} /> {t('file.backup')}
+            </button>
+          </div>
           <div className="card-grid">
             {library.map((d) => (
               <div key={d.id} className="card card--saved">
@@ -145,6 +215,7 @@ export function Gallery() {
               </div>
             ))}
           </div>
+          </>
         )}
       </main>
 
@@ -164,6 +235,7 @@ export function Gallery() {
                   },
                 },
                 { label: t('mine.rename'), onSelect: () => setRenaming(menuFor) },
+                { label: t('file.save'), onSelect: () => void saveFile(menuFor) },
                 { label: t('mine.delete'), destructive: true, onSelect: () => setConfirmDelete(menuFor) },
               ]
             : []

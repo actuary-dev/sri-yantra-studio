@@ -21,6 +21,10 @@ import { TextPanel } from './panels/TextPanel';
 import { StylePanel } from './panels/StylePanel';
 import { ExportSheet, loadExportModule } from './ExportSheet';
 import { HelpSheet } from './HelpSheet';
+import { ArrangeSheet, SelectionBar, useShapeTools } from './ShapeTools';
+import {
+  copySelection, deleteSelection, duplicateSelection, flipSelection, mirrorSelection, nudgeSelection, pasteClipboard, rotateSelection, selectAllShapes,
+} from './shapeOps';
 
 export interface PanelProps {
   design: Design;
@@ -139,6 +143,9 @@ export function Editor() {
   const pending = useEditorUI((s) => s.pending);
   const selectedId = useEditorUI((s) => s.selectedCustomId);
   const exportOpen = useEditorUI((s) => s.exportOpen);
+  const arrangeOpen = useEditorUI((s) => s.arrangeOpen);
+  const selCount = useEditorUI((s) => s.sel.length);
+  const snapOn = useStudio((s) => s.settings.snap);
   const helpOpen = useEditorUI((s) => s.helpOpen);
   const [renaming, setRenaming] = useState(false);
   const [topEl, setTopEl] = useState<HTMLElement | null>(null);
@@ -156,7 +163,7 @@ export function Editor() {
   const invalid = !!built.scene && !built.scene.report.ok;
 
   const activePanel: PanelId | null = wide ? panel ?? 'shape' : panel;
-  const sheetOpen = !wide && panel !== null && !placeMode && !pending && !drawId;
+  const sheetOpen = !wide && panel !== null && !placeMode && !pending && !drawId && !arrangeOpen;
 
   // warm up the export module in the background
   useEffect(() => {
@@ -164,26 +171,46 @@ export function Editor() {
     return () => clearTimeout(id);
   }, []);
 
-  useEffect(() => () => setEditorUI({ panel: null, placeMode: false, pending: null, selectedCustomId: null, drawFigureId: null, exportOpen: false, helpOpen: false }), []);
+  useEffect(() => () => setEditorUI({ panel: null, placeMode: false, pending: null, selectedCustomId: null, drawFigureId: null, exportOpen: false, helpOpen: false, sel: [], multi: false, arrangeOpen: false, preview: null }), []);
 
-  // keyboard shortcuts: undo / redo
+  // keyboard shortcuts: undo / redo, and working with the picked shapes
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      if (!(e.ctrlKey || e.metaKey)) return;
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return;
       const k = e.key.toLowerCase();
-      if (k === 'z' && !e.shiftKey) {
-        e.preventDefault();
-        studio.getState().undo();
-      } else if ((k === 'z' && e.shiftKey) || k === 'y') {
-        e.preventDefault();
-        studio.getState().redo();
+      const mod = e.ctrlKey || e.metaKey;
+      const ui = editorUI.getState();
+      const has = ui.sel.length > 0;
+      const done = () => { e.preventDefault(); e.stopPropagation(); };
+      if (mod) {
+        if (k === 'z' && !e.shiftKey) { done(); studio.getState().undo(); }
+        else if ((k === 'z' && e.shiftKey) || k === 'y') { done(); studio.getState().redo(); }
+        else if (k === 'd' && has) { done(); duplicateSelection(); }
+        else if (k === 'c' && has) { done(); const n = copySelection(); if (n) showToast(t('sel.copiedN', { n }), 'info', 1800); }
+        else if (k === 'x' && has) { done(); copySelection(); deleteSelection(); }
+        else if (k === 'v') { if (pasteClipboard()) done(); }
+        else if (k === 'a') { done(); selectAllShapes(); }
+        return;
       }
+      if (ui.exportOpen || ui.helpOpen || ui.pending) return;
+      if (k === 'escape' && has) { done(); setEditorUI({ sel: [], multi: false, arrangeOpen: false, preview: null }); return; }
+      if (!has) return;
+      if (k === 'delete' || k === 'backspace') { done(); deleteSelection(); }
+      else if (k.startsWith('arrow')) {
+        const u = 1 / (lastGood.current?.unitMm ?? 1);
+        const step = (e.shiftKey ? 5 : e.altKey ? 0.1 : 0.5) * u;
+        done();
+        nudgeSelection(k === 'arrowleft' ? -step : k === 'arrowright' ? step : 0, k === 'arrowup' ? -step : k === 'arrowdown' ? step : 0);
+      } else if (k === 'r' || k === ']') { done(); rotateSelection(e.shiftKey ? -15 : 15); }
+      else if (k === '[') { done(); rotateSelection(-15); }
+      else if (k === 'f') { done(); flipSelection(); }
+      else if (k === 'm') { done(); mirrorSelection(e.shiftKey ? 'tb' : 'lr'); }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [t]);
 
   const insets: Insets = useMemo(
     () => ({ top: topH, right: 0, left: 0, bottom: wide ? 0 : tabH + (sheetOpen ? sheetH : 0) }),
@@ -192,6 +219,9 @@ export function Editor() {
 
   const anchors = useMemo(() => (scene ? placeAnchors(scene.anchors) : []), [scene]);
   const dragOffset = useRef({ x: 0, y: 0 });
+  const dragWhat = useRef<'label' | 'shape' | null>(null);
+  const toolsActive = !placeMode && !drawId && !pending;
+  const tools = useShapeTools({ design, scene, active: toolsActive });
 
   const unitMm = scene?.unitMm ?? 1;
   const hitLabel = useCallback(
@@ -236,24 +266,40 @@ export function Editor() {
         return;
       }
       const textOpen = (wide ? ui.panel ?? 'shape' : ui.panel) === 'text';
-      if (textOpen) setEditorUI({ selectedCustomId: hitLabel(x, y, s) });
+      if (textOpen) {
+        const lid = hitLabel(x, y, s);
+        setEditorUI({ selectedCustomId: lid });
+        if (lid) return;
+      }
+      tools.tapSelect(x, y, s);
     },
-    [anchors, hitLabel, wide],
+    [anchors, hitLabel, wide, tools],
   );
 
   const dragTest = useCallback(
     (x: number, y: number, s: number) => {
+      dragWhat.current = null;
       const id = editorUI.getState().selectedCustomId;
-      if (!id || hitLabel(x, y, s) !== id) return false;
-      const c = design.text.custom.find((l) => l.id === id);
-      if (!c) return false;
-      dragOffset.current = { x: c.x - x, y: c.y - y };
-      return true;
+      const c = id && hitLabel(x, y, s) === id ? design.text.custom.find((l) => l.id === id) : undefined;
+      if (c) {
+        dragOffset.current = { x: c.x - x, y: c.y - y };
+        dragWhat.current = 'label';
+        return true;
+      }
+      if (tools.dragTest(x, y, s)) {
+        dragWhat.current = 'shape';
+        return true;
+      }
+      return false;
     },
-    [design.text.custom, hitLabel],
+    [design.text.custom, hitLabel, tools],
   );
 
-  const onDrag = useCallback((x: number, y: number) => {
+  const onDrag = useCallback((x: number, y: number, s: number) => {
+    if (dragWhat.current === 'shape') {
+      tools.onDrag(x, y, s);
+      return;
+    }
     const id = editorUI.getState().selectedCustomId;
     if (!id) return;
     const nx = x + dragOffset.current.x, ny = y + dragOffset.current.y;
@@ -267,7 +313,11 @@ export function Editor() {
       },
       { coalesceKey: `drag:${id}` },
     );
-  }, []);
+  }, [tools]);
+  const onDragEnd = useCallback(() => {
+    if (dragWhat.current === 'shape') tools.onDragEnd();
+    dragWhat.current = null;
+  }, [tools]);
 
   const selected = selectedId ? design.text.custom.find((c) => c.id === selectedId) : undefined;
   const drawFig = drawId ? (design.centre ?? []).find((f) => f.id === drawId) : undefined;
@@ -275,6 +325,7 @@ export function Editor() {
   const overlay = useCallback(
     (s: number) => (
       <g className="overlay">
+        {tools.overlay(s)}
         {(placeMode || drawId) &&
           anchors.map((a) => (
             <circle key={a.id} cx={a.x} cy={a.y} r={(drawId ? 3.5 : 5) / s} fill="var(--accent)" stroke="#fff" strokeWidth={1.5 / s} opacity={drawId ? 0.55 : 0.9} />
@@ -295,7 +346,7 @@ export function Editor() {
         )}
       </g>
     ),
-    [placeMode, drawId, drawPoints, anchors, selected, unitMm],
+    [placeMode, drawId, drawPoints, anchors, selected, unitMm, tools],
   );
 
   const toggleText = () => {
@@ -363,11 +414,27 @@ export function Editor() {
               onTap={onTap}
               dragTest={dragTest}
               onDrag={onDrag}
+              onDragEnd={onDragEnd}
               resetKey={design.id}
               extraControls={
-                <button type="button" className="float-btn float-btn--round" onClick={() => setEditorUI({ helpOpen: true })} aria-label={t('help.open')}>
-                  <Icon name="info" size={20} />
-                </button>
+                <>
+                  <button type="button" className="float-btn float-btn--round" onClick={() => setEditorUI({ helpOpen: true })} aria-label={t('help.open')}>
+                    <Icon name="info" size={20} />
+                  </button>
+                  <button
+                    type="button"
+                    className={`float-btn float-btn--round${snapOn ? ' is-on' : ''}`}
+                    onClick={() => {
+                      studio.getState().setSnap(!snapOn);
+                      showToast(!snapOn ? t('snap.on') : t('snap.off'), 'info', 1600);
+                    }}
+                    aria-pressed={snapOn}
+                    aria-label={t('snap.toggle')}
+                    title={t('snap.toggle')}
+                  >
+                    <Icon name="magnet" size={20} />
+                  </button>
+                </>
               }
             />
           </ErrorBoundary>
@@ -378,8 +445,16 @@ export function Editor() {
           </div>
         )}
 
-        {(invalid || placeMode || drawId) && (
+        {(invalid || placeMode || drawId || (toolsActive && selCount > 0 && !sheetOpen) || tools.hudText) && (
           <div className="canvas-banners" style={{ top: topH + 8 }}>
+            {toolsActive && selCount > 0 && !tools.hudText && !sheetOpen && (
+              <SelectionBar design={design} nearMisses={tools.nearMisses} onFix={tools.fixNow} onEdit={() => setEditorUI({ panel: 'shape', arrangeOpen: false })} />
+            )}
+            {tools.hudText && (
+              <div className="banner banner--hud" role="status" aria-live="polite">
+                <span>{tools.hudText}</span>
+              </div>
+            )}
             {invalid && (
               <div className="banner banner--warn" role="status">
                 <Icon name="warn" size={20} />
@@ -462,6 +537,7 @@ export function Editor() {
       )}
 
       {scene && <PlaceEditor scene={scene} bottomOffset={wide ? 0 : tabH} topReserve={topH} />}
+      <ArrangeSheet design={design} scene={scene} bottomOffset={wide ? 0 : tabH} topReserve={topH} />
       <ExportSheet open={exportOpen} onClose={() => setEditorUI({ exportOpen: false })} design={design} scene={scene} />
       <HelpSheet open={helpOpen} onClose={() => setEditorUI({ helpOpen: false })} />
       <PromptDialog

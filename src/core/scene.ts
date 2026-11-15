@@ -7,6 +7,7 @@ import { gridLayout, latticeLines, orbitPlacements, polygonLoops, raySegments } 
 import { polygon } from './path';
 import { arrange, type Seg } from './planar';
 import { arcPath, crescentPath, freeLoops, symbolPath, validMerges } from './shapes';
+import { insetCorners, isTriangle, shapeCorners, triangleRows } from './shape';
 import { solveGeometry, TRI, TRI_NAMES, TRI_SANSKRIT, TRI_UP, type Solved } from './solver';
 import type { Anchor, CentreFigure, Design, GeometryReport, LotusBand, PathCmd, Prim, Scene, TriangleInfo } from './types';
 import { buildBands } from '../outer';
@@ -99,7 +100,7 @@ export function buildScene(design: Design, shaper?: Shaper): Scene {
   const anyFill =
     design.cells.filled ||
     design.bands.some((b) => b.visible && 'fill' in b && b.fill) ||
-    centre.some((f) => (f.type === 'polygon' || f.type === 'crescent' || f.type === 'free' || f.type === 'lotus') && f.fill);
+    centre.some((f) => (f.type === 'polygon' || f.type === 'crescent' || f.type === 'free' || f.type === 'lotus' || f.type === 'shape') && f.fill);
 
   const solved = sriSpec ? solveGeometry(design.geometry) : null;
   const unitFig = solved ? buildFigure(solved, design.geometry.flip) : null;
@@ -117,6 +118,7 @@ export function buildScene(design: Design, shaper?: Shaper): Scene {
     else if (f.type === 'arc' || f.type === 'crescent') extent = Math.max(extent, orbitR + f.radius * 1.01);
     else if (f.type === 'symbol') extent = Math.max(extent, orbitR + f.size * 1.45);
     else if (f.type === 'free') for (const q of f.points ?? []) extent = Math.max(extent, Math.hypot(q.x, q.y) * 1.01);
+    else if (f.type === 'shape') for (const q of shapeCorners(f)) extent = Math.max(extent, Math.hypot(q.x, q.y) * 1.01);
     else if (f.type === 'grid') { const g = gridLayout(f); extent = Math.max(extent, Math.hypot(g.width, g.height) / 2); }
   }
   const unitMm = design.sizeMm / (2 * extent);
@@ -215,6 +217,27 @@ export function buildScene(design: Design, shaper?: Shaper): Scene {
         for (let i = 0; i + 1 < loop.length; i++) segs.push({ a: loop[i], b: loop[i + 1] });
         if (closed) segs.push({ a: loop[loop.length - 1], b: loop[0] });
       });
+    } else if (f.type === 'shape') {
+      const layer = `fig:${f.id}`;
+      const c = shapeCorners(f);
+      if (!c.every((q) => Number.isFinite(q.x) && Number.isFinite(q.y))) continue;
+      if (anyFill && f.fill) prims.push({ kind: 'path', d: polygon(c), layer, role: 'fill', paint: { stroke: null, strokeMm: 0, fill: f.fill } });
+      prims.push({ kind: 'path', d: polygon(c), layer, role: 'shape:0', paint: { stroke: ink, strokeMm: f.lineMm, fill: null } });
+      for (let i = 0; i < c.length; i++) segs.push({ a: c[i], b: c[(i + 1) % c.length] });
+      const lines = Math.max(1, Math.min(3, Math.round(f.lines ?? 1)));
+      for (let k = 1; k < lines; k++) {
+        const p = insetCorners(f, mm(f.lineGapMm) * k);
+        if (!p) break;
+        prims.push({ kind: 'path', d: polygon(p), layer, role: `shape:${k}`, paint: { stroke: ink, strokeMm: f.lineMm, fill: null } });
+      }
+      if (isTriangle(f) && (f.rows ?? 1) > 1) {
+        const d: PathCmd[] = [];
+        for (const [p0, p1] of triangleRows(c, f.rows)) {
+          d.push(['M', p0.x, p0.y], ['L', p1.x, p1.y]);
+          segs.push({ a: p0, b: p1 });
+        }
+        prims.push({ kind: 'path', d, layer, role: 'shape-rows', paint: { stroke: ink, strokeMm: f.lineMm, fill: null } });
+      }
     } else if (f.type === 'grid') {
       const g = gridLayout(f);
       const merges = validMerges(f.merges, g.rows, g.cols);

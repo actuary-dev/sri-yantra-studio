@@ -78,6 +78,10 @@ export function HelpSheet({ open, onClose }: { open: boolean; onClose(): void })
           ))}
         </ol>
         <section className="help-about">
+          <h3>{t('help.keysTitle')}</h3>
+          <p>{t('help.keys')}</p>
+        </section>
+        <section className="help-about">
           <h3>{t('help.aboutTitle')}</h3>
           <p>{t('help.about1')}</p>
           <p>{t('help.about2')}</p>

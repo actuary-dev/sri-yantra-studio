@@ -35,7 +35,7 @@ export interface CanvasProps {
   onTap?(x: number, y: number, pxPerUnit: number): void;
   /** return true to start dragging an object at this point instead of panning */
   dragTest?(x: number, y: number, pxPerUnit: number): boolean;
-  onDrag?(x: number, y: number): void;
+  onDrag?(x: number, y: number, pxPerUnit: number): void;
   onDragEnd?(): void;
   /** changing this re-fits the drawing (e.g. a different design was opened) */
   resetKey?: string;
@@ -271,7 +271,7 @@ export function Canvas({ scene, insets, showText = true, overlay, onTap, dragTes
       if (!g.moved) return;
       if (g.mode === 'drag') {
         const w = toWorld(p);
-        cb.current.onDrag?.(w.x, w.y);
+        cb.current.onDrag?.(w.x, w.y, live.current!.s);
       } else {
         live.current = clampView({ s: g.start.s, tx: g.start.tx + dx, ty: g.start.ty + dy });
         userMoved.current = true;

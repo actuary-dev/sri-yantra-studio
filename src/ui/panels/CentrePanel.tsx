@@ -1,14 +1,16 @@
 /** CENTRE: the figures at the heart of the yantra — triangles, stars, circles, number squares, the Sri Yantra. */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { centreOf, latticeHollow, latticeLines, SYMBOL_NAMES, validMerges } from '../../core';
 import type {
   ArcFigure, CentreFigure, CircleFigure, CrescentFigure, FreeFigure, GridFigure, LatticeFigure, LotusFigure, Orbit, PetalShape, PolygonFigure,
   RaysFigure, SriFigure, SymbolFigure, SymbolName,
 } from '../../core/types';
-import { arcFigure, circleFigure, crescentFigure, freeFigure, gridFigure, latticeFigure, lotusFigure, newId, polygonFigure, raysFigure, sriFigure, symbolFigure } from '../../presets';
+import { arcFigure, circleFigure, crescentFigure, freeFigure, gridFigure, latticeFigure, lotusFigure, newId, polygonFigure, raysFigure, shapeFigure, sriFigure, symbolFigure } from '../../presets';
 import { toDevanagariNumber } from '../../text';
 import { updateDesign as update } from '../store';
-import { setEditorUI } from '../runtime';
+import { setEditorUI, showToast, useEditorUI } from '../runtime';
+import { convertible, convertPolygon } from '../shapeOps';
+import { ShapeFigureControls, shapeName } from './ShapeFigureControls';
 import { useT, type TFn, type TKey } from '../i18n';
 import type { PanelProps } from '../Editor';
 import { Group, Row, Block, Chips, ButtonRow } from '../components/List';
@@ -21,7 +23,7 @@ import { Icon } from '../components/Icon';
 import { ActionSheet } from '../components/ActionSheet';
 import { BinduGuides, ShapePanel } from './ShapePanel';
 
-const GLYPH: Record<CentreFigure['type'], string> = { sri: '✡', polygon: '△', circle: '○', grid: '▦', lotus: '❀', rays: '✳', lattice: '▲', arc: '◠', crescent: '☾', symbol: '卐', free: '✎' };
+const GLYPH: Record<CentreFigure['type'], string> = { sri: '✡', polygon: '△', circle: '○', grid: '▦', lotus: '❀', rays: '✳', lattice: '▲', arc: '◠', crescent: '☾', symbol: '卐', free: '✎', shape: '△' };
 
 function updFig<T extends CentreFigure>(id: string, fn: (f: T) => void, coalesceKey?: string) {
   update(
@@ -72,6 +74,8 @@ function figureName(f: CentreFigure, t: TFn): string {
       return t(`symbol.${f.symbol}` as TKey);
     case 'free':
       return t('fig.free', { n: f.points.length });
+    case 'shape':
+      return shapeName(f, t);
   }
 }
 
@@ -202,6 +206,14 @@ function PolygonControls({ f, unitMm }: { f: PolygonFigure; unitMm: number }) {
         </Block>
       )}
       <OrbitControls id={f.id} orbit={f.orbit} unitMm={unitMm} />
+      {convertible(f) && (
+        <div className="convert-hint">
+          <p className="row-hint">{t('poly.convertHint')}</p>
+          <button type="button" className="pill-btn is-accent" onClick={() => { const n = convertPolygon(f.id); if (n) showToast(t('sel.madeFree', { n }), 'success', 3000); }}>
+            <Icon name="magnet" size={18} /> {t('sel.makeFree')}
+          </button>
+        </div>
+      )}
       <LineWeight id={f.id} value={f.lineMm} />
       <Row label={t('shape.parallel')}>
         <Stepper label={t('shape.parallel')} value={f.lines} min={1} max={3} onChange={(v) => updFig<PolygonFigure>(f.id, (x) => { x.lines = v; })} />
@@ -705,7 +717,15 @@ type AddKind = 'triangle' | 'star6' | 'square' | 'polygon' | 'circle' | 'lotus' 
 export function CentrePanel({ design, scene }: PanelProps) {
   const t = useT();
   const figures = centreOf(design);
-  const [open, setOpen] = useState<string | null>(null);
+  // the open row is the figure picked on the canvas (one at a time)
+  const sel = useEditorUI((s) => s.sel);
+  const open = sel.length === 1 ? sel[0] : null;
+  const setOpen = (id: string | null) => setEditorUI({ sel: id ? [id] : [] });
+  useEffect(() => {
+    if (!open) return;
+    const el = document.getElementById(`fig-row-${open}`);
+    el?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+  }, [open]);
   const [adding, setAdding] = useState(false);
   const [deleting, setDeleting] = useState<CentreFigure | null>(null);
   const hasSri = figures.some((f) => f.type === 'sri');
@@ -769,19 +789,57 @@ export function CentrePanel({ design, scene }: PanelProps) {
     if (kind === 'free') setEditorUI({ drawFigureId: id });
   };
 
+  /** Triangles and squares: the shapes almost every yantra is made of. */
+  const addShape = (lock: 'isosceles' | 'equilateral' | 'square', rotationDeg = 0) => {
+    const id = newId('f');
+    const radii = figures.filter((f): f is PolygonFigure | CircleFigure | SriFigure => 'radius' in f).map((f) => f.radius);
+    const size = radii.length ? Math.max(0.2, Math.min(1.4, Math.min(...radii) * 1.1)) : 1.2;
+    const f = shapeFigure(id, lock, size, { rotationDeg, lineMm, h: lock === 'isosceles' ? size * 0.75 : undefined });
+    update((d) => {
+      d.centre = centreOf(d);
+      d.centre.push(lock === 'isosceles' ? f : { ...f, h: lock === 'square' ? size : (size * Math.sqrt(3)) / 2 });
+    });
+    setEditorUI({ sel: [id] });
+    // on a phone, get the panel out of the way so the new shape can be dragged at once
+    if (typeof window !== 'undefined' && window.matchMedia && !window.matchMedia('(min-width: 900px)').matches) setEditorUI({ panel: null });
+  };
+
   const kinds: AddKind[] = ['triangle', 'star6', 'square', 'polygon', 'circle', 'lotus', 'rays', 'lattice', 'arc', 'crescent', 'symbol', 'free', 'grid', ...(hasSri ? [] : (['sri'] as AddKind[]))];
   const addGlyph: Record<AddKind, string> = { triangle: '▼', star6: '✡', square: '■', polygon: '✴', circle: '○', lotus: '❀', rays: '✳', lattice: '▲', arc: '◠', crescent: '☾', symbol: '卐', free: '✎', grid: '▦', sri: '✡' };
 
   return (
     <>
       <p className="panel-intro">{t('centre.intro')}</p>
+      <div className="quick-add" role="group" aria-label={t('centre.quickAdd')}>
+        <button type="button" className="quick-add-btn" onClick={() => addShape('isosceles', 0)}>
+          <span className="quick-add-glyph" aria-hidden="true">▲</span>
+          <span>{t('quick.triUp')}</span>
+        </button>
+        <button type="button" className="quick-add-btn" onClick={() => addShape('isosceles', 180)}>
+          <span className="quick-add-glyph" aria-hidden="true">▼</span>
+          <span>{t('quick.triDown')}</span>
+        </button>
+        <button type="button" className="quick-add-btn" onClick={() => addShape('equilateral', 0)}>
+          <span className="quick-add-glyph" aria-hidden="true">△</span>
+          <span>{t('quick.equi')}</span>
+        </button>
+        <button type="button" className="quick-add-btn" onClick={() => addShape('square', 0)}>
+          <span className="quick-add-glyph" aria-hidden="true">■</span>
+          <span>{t('quick.square')}</span>
+        </button>
+        <button type="button" className="quick-add-btn" onClick={() => setAdding(true)}>
+          <span className="quick-add-glyph" aria-hidden="true">＋</span>
+          <span>{t('quick.more')}</span>
+        </button>
+      </div>
+      <p className="row-hint" style={{ margin: '0 4px 12px' }}>{t('centre.canvasHint')}</p>
       <Group>
         {figures.length === 0 && <div className="row muted">{t('centre.none')}</div>}
         {figures.map((f, i) => {
           const isOpen = open === f.id;
           const name = figureName(f, t);
           return (
-            <div key={f.id} className={`band${isOpen ? ' is-open' : ''}${f.visible ? '' : ' is-hidden'}`}>
+            <div key={f.id} id={`fig-row-${f.id}`} className={`band${isOpen ? ' is-open' : ''}${f.visible ? '' : ' is-hidden'}${sel.includes(f.id) ? ' is-selected' : ''}`}>
               <div className="row band-row">
                 <span className="row-icon band-glyph" aria-hidden="true" style={{ fontSize: 22, lineHeight: 1 }}>
                   {GLYPH[f.type]}
@@ -825,6 +883,7 @@ export function CentrePanel({ design, scene }: PanelProps) {
                   {f.type === 'crescent' && <CrescentControls f={f} unitMm={scene.unitMm} />}
                   {f.type === 'symbol' && <SymbolControls f={f} unitMm={scene.unitMm} />}
                   {f.type === 'free' && <FreeControls f={f} />}
+                  {f.type === 'shape' && <ShapeFigureControls f={f} unitMm={scene.unitMm} />}
                 </div>
               )}
             </div>
