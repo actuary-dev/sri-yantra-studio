@@ -101,6 +101,87 @@ finds Shani (centred), Kuja (equilateral) or both. With both, and the top and bo
 at Huet's 0.887 and 0.165, the great upward triangle's base lands at 0.3819 of the diameter
 — a base angle of 51.83°.
 
+## 7. Triangles of any shape (`src/core/triangle.ts`)
+
+A free triangle is stored the way it is laid out on the bench: a **base**, a **height**, and a
+**skew** saying how far the apex stands off the middle of the base (0 = isosceles, ±1 = the apex
+over a base corner, i.e. right-angled, beyond ±1 = obtuse). It can equally be stated by
+
+* an apex angle α (isosceles): `height = (base/2) / tan(α/2)`;
+* the two base angles L, R: `height = base / (cot L + cot R)`, apex foot at `height·cot L` from the left corner;
+* three sides a (right), b (left), c (base): foot `d = (b² + c² − a²) / 2c`, `height = √(b² − d²)`.
+
+One of five points — centroid, incentre, circumcentre, middle of the base, apex — is pinned to a
+position in millimetres and is also the point the triangle turns about. Changing the pinned point
+restates the position; the triangle itself does not move.
+
+**Separating the Sri Yantra.** `sriAsTriangles` converts the solved figure into nine such triangles
+(pinned at the middle of the base, skew 0). The test-suite checks that the separated figure has
+exactly the same 27 line segments as the solved one, for every geometry preset.
+
+Apex angles offered as presets, and why they are notable:
+
+| Apex | Base angles | Where it comes from |
+|------|-------------|---------------------|
+| 36°  | 72°, 72°    | "Golden triangle": side / base = φ. The point of a pentagram. |
+| 60°  | 60°, 60°    | Equilateral. |
+| 76.35° | 51.83°    | Base angles of atan √φ. The Sri Yantra's great upward triangle comes close to this when the figure is centred with an equilateral heart (§6). |
+| 90°  | 45°, 45°    | Half a square. |
+| 108° | 36°, 36°    | "Golden gnomon": base / side = φ. |
+| 120° | 30°, 30°    | A third of an equilateral triangle. |
+
+A caution on the 51° angle: Kulaichev (1984) looked for whole-number ratios, simple fractions and
+well-known constants in the exact figure and reported finding none. The app therefore *shows*
+the base angles of the two great triangles and does not claim that any particular value is canonical.
+
+## 8. Accuracy checks for any yantra (`src/core/analyse.ts`)
+
+The Sri Yantra solver guarantees its own figure. Everything else — separated triangles,
+hand-drawn shapes, figures placed by typed numbers — is checked by a general analysis of the
+straight lines and circles of the drawing. With the first circle's radius as 1:
+
+* **Exactly meeting** means within 10⁻⁷ (far below anything that can be engraved).
+* **Nearly meeting** means within 0.005, about half a millimetre on a 300 mm yantra. Larger gaps
+  are taken to be intended: several good Sri Yantras have real cells under 1 % of the radius across.
+
+Three faults are reported, each with its position and the size of the gap in millimetres:
+
+1. *Three lines leave a small gap.* Lines i, j, k whose three pairwise crossings fall within the
+   tolerance of one another without coinciding — the failed marma point of a badly drawn Sri Yantra.
+   Two pieces of the same infinite line count as one line.
+2. *A corner stops just off a line.*
+3. *A corner stops just off a circle* — a triangle meant to be inscribed that is not quite.
+
+It also reports **symmetry** (left–right mirror, top–bottom mirror, and the largest n for which a
+turn of 360°/n leaves the lines unchanged), a near-mirror error when the figure is almost but not
+exactly symmetric, and the **directions** of all lines with the largest "round" angle of which
+they are all multiples (a hexagram reads 0°, 60°, 120° on a 60° grid).
+
+Every starting design in the app passes these checks with no fault (verified in the test-suite).
+
+## 9. Exact rules behind the other yantras
+
+* **Stars.** A star of n corners joined every k-th has corners 360°/n apart and a point angle of
+  `180° − 360°·k/n`: hexagram {6/2} 60°, pentagram {5/2} 36°, eight-pointed {8/3} 45°, {8/2} 90°.
+  The pentagram's inner pentagon has 1/φ² of the outer radius, which is how the "Five Golden
+  Triangles" design reaches the circle exactly.
+* **Lotuses.** n petals divide the circle into n equal parts of 360°/n. Petal counts in the tradition
+  are 2, 4, 6, 8, 10, 12, 16 (the six body lotuses and their neighbours), then 24, 32, 64, 100, 1000.
+* **Number squares.** A square is *magic* when every row, column and both diagonals have one sum.
+  The app also reports when a square is *normal* (uses 1…n² once each) and *pandiagonal* (every
+  broken diagonal has the sum too). The Chautisa (34) square carved at the Parshvanatha temple,
+  Khajuraho, around the 12th century is both; it is counted among the three
+  pandiagonal 4×4 squares. Nārāyaṇa Paṇḍita's *Gaṇita Kaumudī* (1356) treats the subject as
+  *bhadra-gaṇita*, gives the knight's-move construction of all 384 pandiagonal 4×4 squares, and
+  names making yantras as one purpose of the study. The nine planetary 3×3 squares are the 15
+  square with 0…8 added to every cell.
+* **Vāstu grids.** The ground plan divides a square into n×n equal *padas*. The two used most are
+  the 8×8 Maṇḍūka (64, Brahmā holding the middle four) for temples and the 9×9 Paramaśāyika
+  (81, Brahmā holding the middle nine).
+* **The 81sts hypothesis.** One anonymous typescript (2012) holds that the nine apex angles of the
+  Sri Yantra are whole multiples of 360°/81. The triangle table shows each apex angle in those
+  units so that the claim can be tested against any geometry; the app does not assert it.
+
 ## Sources
 
 * G. Huet, *Sri Yantra Geometry*, Theoretical Computer Science 281 (2002) 609–628.
@@ -109,3 +190,6 @@ at Huet's 0.887 and 0.165, the great upward triangle's base lands at 0.3819 of t
 * N. J. Bolton, D. N. G. Macleod, *The geometry of the Śrī-yantra*, Religion 7(1) (1977).
 * C. S. Rao, *Sriyantra — a study of spherical and plane forms*, Indian J. History of Science 33(3) (1998).
 * sriyantraresearch.com — "The Optimal Sri Yantra".
+* A. Chiodo, *On the construction of the Śrī Yantra*, Comptes Rendus Mathématique 359(4) (2021) 377–397 — straightedge-and-compass construction; independently finds four degrees of freedom.
+* sriyantrageometry.com, "The sources" — a tested index of the literature (source of the 81sts hypothesis and of the remark that Kulaichev found no simple constants).
+* Wikipedia, "Magic square" (sections on India and on the Parshvanatha temple square), summarising Datta & Singh and Hayashi on Nārāyaṇa's *Gaṇita Kaumudī*, ch. 14.

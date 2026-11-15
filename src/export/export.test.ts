@@ -9,7 +9,7 @@ import type { ExportOptions } from './index';
 
 const INK = '#112233';
 const mk = (prims: Prim[], unitMm = 100): Scene => ({
-  prims, extent: 1, unitMm, anchors: [], ink: INK, paper: '#f5f1e8',
+  prims, extent: 1, unitMm, anchors: [], lines: [], rounds: [], ink: INK, paper: '#f5f1e8',
   report: {} as Scene['report'],
 });
 const opts = (o: Partial<ExportOptions> = {}): ExportOptions => ({ ...DEFAULT_EXPORT, marginMm: 0, ...o });

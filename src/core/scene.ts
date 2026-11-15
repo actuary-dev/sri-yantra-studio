@@ -5,16 +5,19 @@
 import { buildFigure, bottomAnticlockwiseKey, type Figure, type Pt } from './arrangement';
 import { gridLayout, latticeLines, orbitPlacements, polygonLoops, raySegments } from './figures';
 import { polygon } from './path';
-import { arrange, type Seg } from './planar';
+import { analyse } from './analyse';
+import { arrange } from './planar';
 import { arcPath, crescentPath, freeLoops, symbolPath, validMerges } from './shapes';
 import { solveGeometry, TRI, TRI_NAMES, TRI_SANSKRIT, TRI_UP, type Solved } from './solver';
-import type { Anchor, CentreFigure, Design, GeometryReport, LotusBand, PathCmd, Prim, Scene, TriangleInfo } from './types';
+import { trianglePoints } from './triangle';
+import type { Anchor, CentreFigure, Design, GeometryReport, LotusBand, PathCmd, Prim, Scene, SceneLine, TriangleInfo } from './types';
 import { buildBands } from '../outer';
 import { buildLabels, resolveText, type Shaper } from '../text';
 
 const GUIDE_MARMA = '#c0392b';
 const GUIDE_SANDHI = '#1f6fb2';
 const GUIDE_AXIS = '#8a8a8a';
+const GUIDE_CHECK = '#e67e22';
 
 const deg = (rad: number) => (rad * 180) / Math.PI;
 
@@ -27,6 +30,14 @@ function insetTriangle(pts: Pt[], centre: Pt, inradius: number, distance: number
   const k = 1 - distance / inradius;
   if (!(k > 0.12)) return null;
   return pts.map((p) => ({ x: centre.x + (p.x - centre.x) * k, y: centre.y + (p.y - centre.y) * k }));
+}
+
+function incircleOf(p: Pt[]): { c: Pt; r: number } {
+  const [A, B, C] = p;
+  const a = Math.hypot(B.x - C.x, B.y - C.y), b = Math.hypot(A.x - C.x, A.y - C.y), c = Math.hypot(A.x - B.x, A.y - B.y);
+  const s = a + b + c || 1;
+  const area = Math.abs((B.x - A.x) * (C.y - A.y) - (B.y - A.y) * (C.x - A.x)) / 2;
+  return { c: { x: (a * A.x + b * B.x + c * C.x) / s, y: (a * A.y + b * B.y + c * C.y) / s }, r: (2 * area) / s };
 }
 
 function scaleFigure(f: Figure, k: number): Figure {
@@ -99,7 +110,7 @@ export function buildScene(design: Design, shaper?: Shaper): Scene {
   const anyFill =
     design.cells.filled ||
     design.bands.some((b) => b.visible && 'fill' in b && b.fill) ||
-    centre.some((f) => (f.type === 'polygon' || f.type === 'crescent' || f.type === 'free' || f.type === 'lotus') && f.fill);
+    centre.some((f) => (f.type === 'polygon' || f.type === 'crescent' || f.type === 'free' || f.type === 'lotus' || f.type === 'triangle') && f.fill);
 
   const solved = sriSpec ? solveGeometry(design.geometry) : null;
   const unitFig = solved ? buildFigure(solved, design.geometry.flip) : null;
@@ -116,6 +127,7 @@ export function buildScene(design: Design, shaper?: Shaper): Scene {
     else if (f.type === 'lattice') extent = Math.max(extent, f.radius * 1.01);
     else if (f.type === 'arc' || f.type === 'crescent') extent = Math.max(extent, orbitR + f.radius * 1.01);
     else if (f.type === 'symbol') extent = Math.max(extent, orbitR + f.size * 1.45);
+    else if (f.type === 'triangle') { for (const pl of orbitPlacements(f.orbit)) for (const q of trianglePoints(f, pl)) extent = Math.max(extent, Math.hypot(q.x, q.y) * 1.01); }
     else if (f.type === 'free') for (const q of f.points ?? []) extent = Math.max(extent, Math.hypot(q.x, q.y) * 1.01);
     else if (f.type === 'grid') { const g = gridLayout(f); extent = Math.max(extent, Math.hypot(g.width, g.height) / 2); }
   }
@@ -124,14 +136,15 @@ export function buildScene(design: Design, shaper?: Shaper): Scene {
 
   const prims: Prim[] = [...outer.prims];
   const anchors: Anchor[] = [];
-  const segs: Seg[] = []; // every straight line at the centre, for 'points' and 'regions'
+  const segs: SceneLine[] = []; // every straight line at the centre, for 'points', 'regions' and the accuracy checks
+  const rounds: Scene['rounds'] = [{ x: 0, y: 0, r: 1 }];
   const gridText: Prim[] = [];
   const figureAnchors: Anchor[] = [];
   if (anyFill) prims.push({ kind: 'circle', cx: 0, cy: 0, r: 1, layer: 'cells', role: 'ground', paint: { stroke: null, strokeMm: 0, fill: paper } });
 
   for (const f of centre) {
     if (f.type === 'sri') {
-      if (fig) drawSri(design, fig, prims, mm, ink, segs);
+      if (fig) drawSri(design, fig, prims, mm, ink, segs, f.id);
     } else if (f.type === 'polygon') {
       const layer = `fig:${f.id}`;
       const gap = mm(f.lineGapMm);
@@ -154,7 +167,7 @@ export function buildScene(design: Design, shaper?: Shaper): Scene {
             }
             for (let i = 0; i < loop.length; i++) {
               if (loop.length === 2 && i === 1) break;
-              segs.push({ a: loop[i], b: loop[(i + 1) % loop.length] });
+              segs.push({ a: loop[i], b: loop[(i + 1) % loop.length], owner: f.id });
             }
           });
         });
@@ -162,8 +175,26 @@ export function buildScene(design: Design, shaper?: Shaper): Scene {
     } else if (f.type === 'circle') {
       const n = Math.max(1, Math.min(12, Math.round(f.count)));
       for (const pl of orbitPlacements(f.orbit))
-        for (let i = 0; i < n; i++)
-          prims.push({ kind: 'circle', cx: pl.x, cy: pl.y, r: Math.max(1e-4, f.radius + i * f.spacing), layer: `fig:${f.id}`, role: `circle:${i}`, paint: { stroke: ink, strokeMm: f.lineMm, fill: null } });
+        for (let i = 0; i < n; i++) {
+          const r = Math.max(1e-4, f.radius + i * f.spacing);
+          prims.push({ kind: 'circle', cx: pl.x, cy: pl.y, r, layer: `fig:${f.id}`, role: `circle:${i}`, paint: { stroke: ink, strokeMm: f.lineMm, fill: null } });
+          rounds.push({ x: pl.x, y: pl.y, r });
+        }
+    } else if (f.type === 'triangle') {
+      const layer = `fig:${f.id}`;
+      const gap = mm(f.lineGapMm);
+      const lines = Math.max(1, Math.min(3, Math.round(f.lines)));
+      orbitPlacements(f.orbit).forEach((pl, pi) => {
+        const pts = trianglePoints(f, pl);
+        if (anyFill && f.fill) prims.push({ kind: 'path', d: polygon(pts), layer, role: 'fill', paint: { stroke: null, strokeMm: 0, fill: f.fill } });
+        const ic = incircleOf(pts);
+        for (let k = 0; k < lines; k++) {
+          const p = k === 0 ? pts : insetTriangle(pts, ic.c, ic.r, gap * k);
+          if (!p) break;
+          prims.push({ kind: 'path', d: polygon(p), layer, role: `triangle:${pi}:${k}`, paint: { stroke: ink, strokeMm: f.lineMm, fill: null } });
+        }
+        segs.push({ a: pts[0], b: pts[1], owner: f.id }, { a: pts[1], b: pts[2], owner: f.id }, { a: pts[2], b: pts[0], owner: f.id });
+      });
     } else if (f.type === 'lotus') {
       const band: LotusBand = {
         id: f.id, type: 'lotus', visible: true, gap: 0, lineMm: f.lineMm, petals: f.petals, height: f.height, shape: f.shape,
@@ -177,7 +208,7 @@ export function buildScene(design: Design, shaper?: Shaper): Scene {
       const d: PathCmd[] = [];
       for (const [p0, p1] of rays.segs) {
         d.push(['M', p0.x, p0.y], ['L', p1.x, p1.y]);
-        segs.push({ a: p0, b: p1 });
+        segs.push({ a: p0, b: p1, owner: f.id });
       }
       prims.push({ kind: 'path', d, layer: `fig:${f.id}`, role: 'rays', paint: { stroke: ink, strokeMm: f.lineMm, fill: null } });
       // one place for text in the middle of each sector, ordered from the bottom, anticlockwise as seen
@@ -194,7 +225,7 @@ export function buildScene(design: Design, shaper?: Shaper): Scene {
       const d: PathCmd[] = [];
       for (const [p0, p1] of latticeLines(f).lines) {
         d.push(['M', p0.x, p0.y], ['L', p1.x, p1.y]);
-        segs.push({ a: p0, b: p1 });
+        segs.push({ a: p0, b: p1, owner: f.id });
       }
       prims.push({ kind: 'path', d, layer: `fig:${f.id}`, role: 'lattice', paint: { stroke: ink, strokeMm: f.lineMm, fill: null } });
     } else if (f.type === 'arc') {
@@ -212,8 +243,8 @@ export function buildScene(design: Design, shaper?: Shaper): Scene {
         const d: PathCmd[] = closed ? polygon(loop) : loop.map((q, i) => [i === 0 ? 'M' : 'L', q.x, q.y] as PathCmd);
         if (closed && anyFill && f.fill) prims.push({ kind: 'path', d, layer: `fig:${f.id}`, role: 'fill', paint: { stroke: null, strokeMm: 0, fill: f.fill } });
         prims.push({ kind: 'path', d, layer: `fig:${f.id}`, role: `free:${li}`, paint: { stroke: ink, strokeMm: f.lineMm, fill: null } });
-        for (let i = 0; i + 1 < loop.length; i++) segs.push({ a: loop[i], b: loop[i + 1] });
-        if (closed) segs.push({ a: loop[loop.length - 1], b: loop[0] });
+        for (let i = 0; i + 1 < loop.length; i++) segs.push({ a: loop[i], b: loop[i + 1], owner: f.id });
+        if (closed) segs.push({ a: loop[loop.length - 1], b: loop[0], owner: f.id });
       });
     } else if (f.type === 'grid') {
       const g = gridLayout(f);
@@ -260,7 +291,10 @@ export function buildScene(design: Design, shaper?: Shaper): Scene {
   }
 
   // -- bindu: at the heart of the Sri Yantra when there is one, otherwise the exact centre
-  const bindu: Pt = fig ? fig.bindu : { x: 0, y: 0 };
+  const bindu: Pt =
+    Number.isFinite(design.bindu.x) && Number.isFinite(design.bindu.y)
+      ? { x: design.bindu.x as number, y: design.bindu.y as number }
+      : fig ? fig.bindu : { x: 0, y: 0 };
   if (design.bindu.visible) {
     const r = design.bindu.radius;
     const style = design.bindu.style;
@@ -280,6 +314,16 @@ export function buildScene(design: Design, shaper?: Shaper): Scene {
       paint: { stroke: GUIDE_AXIS, strokeMm: design.triangles.lineMm * 0.4, fill: null },
     });
   }
+  const radialDeg = design.guides.radialDeg ?? 0;
+  if (radialDeg >= 1) {
+    const d: PathCmd[] = [];
+    const n = Math.min(360, Math.round(360 / radialDeg));
+    for (let i = 0; i < n; i++) {
+      const a = ((-90 + i * radialDeg) * Math.PI) / 180;
+      d.push(['M', 0, 0], ['L', extent * Math.cos(a), extent * Math.sin(a)]);
+    }
+    prims.push({ kind: 'path', d, layer: 'guides', role: 'radial', paint: { stroke: GUIDE_AXIS, strokeMm: design.triangles.lineMm * 0.3, fill: null } });
+  }
   const arr = arrange(segs);
   const dotR = Math.max(mm(design.triangles.lineMm) * 1.6, 0.009);
   const sandhiPts = fig ? fig.sandhis : [];
@@ -290,6 +334,12 @@ export function buildScene(design: Design, shaper?: Shaper): Scene {
   if (design.guides.marma)
     for (const p of marmaPts)
       prims.push({ kind: 'circle', cx: p.x, cy: p.y, r: dotR, layer: 'guides', role: 'marma', paint: { stroke: null, strokeMm: 0, fill: GUIDE_MARMA } });
+
+  if (design.guides.checks) {
+    const ringR = Math.max(dotR * 3.5, 0.04);
+    for (const m of analyse(segs, rounds).nearMisses)
+      prims.push({ kind: 'circle', cx: m.x, cy: m.y, r: ringR, layer: 'guides', role: `check:${m.kind}`, paint: { stroke: GUIDE_CHECK, strokeMm: Math.max(design.triangles.lineMm * 1.6, 0.6), fill: null } });
+  }
 
   // -- anchors
   const outDeg = (p: Pt) => deg(Math.atan2(p.y - bindu.y, p.x - bindu.x));
@@ -323,7 +373,7 @@ export function buildScene(design: Design, shaper?: Shaper): Scene {
   anchors.push(...figureAnchors, ...outer.anchors);
 
   const report = makeReport(!!sriSpec, solved, unitFig);
-  let scene: Scene = { prims, extent, unitMm, anchors, report, ink, paper };
+  let scene: Scene = { prims, extent, unitMm, anchors, report, lines: segs, rounds, ink, paper };
 
   if (design.text.visible) {
     scene.prims.push(...gridText);
@@ -334,7 +384,7 @@ export function buildScene(design: Design, shaper?: Shaper): Scene {
 }
 
 /** The nine triangles with their 43 cells. */
-function drawSri(design: Design, fig: Figure, prims: Prim[], mm: (v: number) => number, ink: string, segs: Seg[]) {
+function drawSri(design: Design, fig: Figure, prims: Prim[], mm: (v: number) => number, ink: string, segs: SceneLine[], owner: string) {
   if (design.cells.filled) {
     for (const c of fig.cells) {
       prims.push({
@@ -376,7 +426,7 @@ function drawSri(design: Design, fig: Figure, prims: Prim[], mm: (v: number) => 
           paint: { stroke: ink, strokeMm: design.triangles.lineMm, fill: null },
         });
       }
-      segs.push({ a: t.pts[0], b: t.pts[1] }, { a: t.pts[0], b: t.pts[2] }, { a: t.pts[1], b: t.pts[2] });
+      segs.push({ a: t.pts[0], b: t.pts[1], owner }, { a: t.pts[0], b: t.pts[2], owner }, { a: t.pts[1], b: t.pts[2], owner });
     });
   }
 }
