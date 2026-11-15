@@ -15,8 +15,12 @@ export interface SliderRowProps {
   /** logarithmic mapping (for line weights) */
   log?: boolean;
   hint?: ReactNode;
-  /** show an editable number field instead of the plain read-out */
-  numeric?: { digits: number; suffix?: string };
+  /**
+   * show an editable number field instead of the plain read-out. A typed number is kept
+   * exactly (it is not rounded to the slider's step). `scale` converts the stored value to
+   * the unit shown, e.g. scene units to millimetres.
+   */
+  numeric?: { digits: number; suffix?: string; scale?: number };
   /** told when a drag starts / ends */
   onActiveChange?(active: boolean): void;
 }
@@ -41,7 +45,15 @@ export function SliderRow({ label, value, min, max, step, onChange, display, dis
           {label}
         </label>
         {numeric ? (
-          <NumberField value={value} onChange={(v) => onChange(snap(v))} min={min} max={max} digits={numeric.digits} suffix={numeric.suffix} label={label} />
+          <NumberField
+            value={value * (numeric.scale ?? 1)}
+            onChange={(v) => onChange(Math.min(max, Math.max(min, v / (numeric.scale ?? 1))))}
+            min={min * (numeric.scale ?? 1)}
+            max={max * (numeric.scale ?? 1)}
+            digits={numeric.digits}
+            suffix={numeric.suffix}
+            label={label}
+          />
         ) : (
           <span className="slider-value" aria-hidden="true">
             {display ?? String(value)}

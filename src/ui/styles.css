@@ -816,7 +816,7 @@ textarea.text-input {
 }
 
 .gallery-bar .segmented {
-  width: 150px;
+  width: 170px;
 }
 
 .gallery-main {
@@ -2191,4 +2191,50 @@ button.card:active,
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* exact number entry: triangles, free-shape points */
+
+.num-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 8px 0 4px;
+}
+
+.num-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--label-2);
+}
+
+.num-grid .numfield input {
+  width: 100%;
+  min-width: 0;
+}
+
+.num-grid .numfield {
+  min-width: 0;
+}
+
+.num-grid--point {
+  grid-template-columns: 26px minmax(0, 1fr) minmax(0, 1fr) 74px;
+  align-items: center;
+  margin: 6px 0;
+}
+
+.row-hint.is-warn {
+  color: var(--red, #c0392b);
+}
+
+.banner--measure {
+  flex-wrap: wrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.float-btn.is-on {
+  background: var(--accent);
+  color: #fff;
 }

@@ -3,8 +3,9 @@
  */
 import type {
   ArcFigure, Band, BhupuraBand, CircleBand, CircleFigure, CrescentFigure, CustomLabel, Design, FreeFigure, SymbolFigure, SymbolName, BeadBand, GridFigure, LabelSet, LatticeFigure, LotusBand, LotusFigure,
-  PolygonFigure, RaysFigure, SriFigure, TextRingBand,
+  PolygonFigure, RaysFigure, SriFigure, TextRingBand, TriangleFigure,
 } from '../core/types';
+import { shapeFromApexAngle, sriAsTriangles } from '../core/triangle';
 import { createLabelSet, toDevanagariNumber } from '../text';
 
 let counter = 0;
@@ -66,6 +67,11 @@ export const crescentFigure = (id: string, radius: number, p: Partial<CrescentFi
 });
 export const symbolFigure = (id: string, symbol: SymbolName, p: Partial<SymbolFigure> = {}): SymbolFigure => ({
   id, type: 'symbol', visible: true, symbol, size: 0.15, rotationDeg: 0, lineMm: 0.5, ...p,
+});
+/** A triangle of any shape. Sizes in scene units; (x, y) is where its `pivot` point sits. */
+export const triangleFigure = (id: string, p: Partial<TriangleFigure> = {}): TriangleFigure => ({
+  id, type: 'triangle', visible: true, base: 1, height: Math.sqrt(3) / 2, skew: 0, pivot: 'centroid', x: 0, y: 0, rotationDeg: 0,
+  lineMm: 0.5, lines: 1, lineGapMm: 1.2, fill: null, ...p,
 });
 export const freeFigure = (id: string, points: [number, number][], p: Partial<FreeFigure> = {}): FreeFigure => ({
   id, type: 'free', visible: true, points: points.map(([x, y]) => ({ x, y })), closed: true, repeat: 1, lineMm: 0.5, fill: null, ...p,
@@ -173,7 +179,8 @@ export function createDesign(p: Partial<Design> = {}): Design {
   };
 }
 
-export type PresetCategory = 'forms' | 'mahavidya' | 'chakras' | 'numbers' | 'sri';
+export type PresetCategory = 'forms' | 'triangles' | 'mahavidya' | 'chakras' | 'numbers' | 'sri';
+export const PRESET_CATEGORIES: PresetCategory[] = ['forms', 'triangles', 'mahavidya', 'chakras', 'numbers', 'sri'];
 
 export interface Preset {
   id: string;
@@ -183,6 +190,11 @@ export interface Preset {
   blurb: string;
   blurbHi: string;
   make(): Design;
+}
+
+/** Name and description of a starting design in the given language. */
+export function presetText(p: Preset, lang: 'en' | 'hi'): { name: string; blurb: string } {
+  return lang === 'hi' ? { name: p.nameHi, blurb: p.blurbHi } : { name: p.name, blurb: p.blurb };
 }
 
 export const PRESETS: Preset[] = [
@@ -463,6 +475,254 @@ export const PRESETS: Preset[] = [
       }),
   },
   {
+    id: 'durga',
+    category: 'forms',
+    name: 'Durga: Nine Points',
+    nameHi: 'दुर्गा यन्त्र (नवकोण)',
+    blurb: 'Three interlocked triangles with a downward triangle at the heart, eight and sixteen petals. A widely sold form; lineages differ.',
+    blurbHi: 'तीन गुँथे त्रिकोण, मध्य में अधोमुख त्रिकोण, अष्टदल और षोडशदल। प्रचलित रूप; परम्पराओं में भेद है।',
+    make: () =>
+      createDesign({
+        name: 'Durga Yantra',
+        centre: [polygonFigure('p1', 9, { step: 3, rotationDeg: 180 }), polygonFigure('p2', 3, { radius: 0.3, rotationDeg: 180 })],
+        bands: standardBands(),
+        text: { visible: true, font: 'tiro', color: null, sets: [], custom: [textAt('दुं', 9, 0, -0.02)] },
+        style: { ...PAPERS.vermilion },
+      }),
+  },
+  {
+    id: 'hanuman',
+    category: 'forms',
+    name: 'Hanuman: Triangle in Star',
+    nameHi: 'हनुमान यन्त्र',
+    blurb: 'An upward triangle holding the seed syllable inside a six-pointed star, eight petals, on vermilion. A common form; lineages differ.',
+    blurbHi: 'षट्कोण के भीतर बीजाक्षर सहित ऊर्ध्वमुख त्रिकोण, अष्टदल, सिन्दूरी वर्ण। प्रचलित रूप; परम्पराओं में भेद है।',
+    make: () =>
+      createDesign({
+        name: 'Hanuman Yantra',
+        centre: [polygonFigure('p1', 6, { step: 2 }), polygonFigure('p2', 3, { radius: 0.4 })],
+        bindu: noBindu,
+        bands: simpleBands(),
+        text: { visible: true, font: 'tiro', color: null, sets: [], custom: [textAt('हं', 14, 0, 0.03)] },
+        style: { ...PAPERS.vermilion },
+      }),
+  },
+  {
+    id: 'mrityunjaya',
+    category: 'forms',
+    name: 'Mahamrityunjaya: Star and Trident',
+    nameHi: 'महामृत्युञ्जय यन्त्र',
+    blurb: 'A five-pointed star with a trident at the heart, in a circle and eight petals. A common form; lineages differ.',
+    blurbHi: 'पञ्चकोण तारा, मध्य में त्रिशूल, वृत्त और अष्टदल। प्रचलित रूप; परम्पराओं में भेद है।',
+    make: () =>
+      createDesign({
+        name: 'Mahamrityunjaya Yantra',
+        centre: [polygonFigure('p1', 5, { step: 2 }), symbolFigure('tri', 'trident', { size: 0.2 })],
+        bindu: noBindu,
+        bands: simpleBands(),
+        style: { ...PAPERS.silver },
+      }),
+  },
+  {
+    id: 'shiva',
+    category: 'forms',
+    name: 'Shiva: Upward Triangles',
+    nameHi: 'शिव यन्त्र (ऊर्ध्व त्रिकोण)',
+    blurb: 'Three upward triangles one inside another, three circles and eight petals. A common form; lineages differ.',
+    blurbHi: 'एक के भीतर एक तीन ऊर्ध्वमुख त्रिकोण, तीन वृत्त और अष्टदल। प्रचलित रूप; परम्पराओं में भेद है।',
+    make: () =>
+      createDesign({
+        name: 'Shiva Yantra',
+        centre: [polygonFigure('p1', 3, { nest: 3, nestRatio: 0.6 })],
+        bands: [circleBand('c0', { count: 3, spacing: 0.035 }), lotusBand('l8', 8, { height: 0.26 }), circleBand('c1'), bhupuraBand('bhu')],
+        style: { ...PAPERS.night },
+      }),
+  },
+  {
+    id: 'vishnu',
+    category: 'forms',
+    name: 'Vishnu: Star with Twelve Petals',
+    nameHi: 'विष्णु यन्त्र',
+    blurb: 'A six-pointed star with eight and twelve petals. A common form; lineages differ.',
+    blurbHi: 'षट्कोण, अष्टदल और द्वादशदल। प्रचलित रूप; परम्पराओं में भेद है।',
+    make: () =>
+      createDesign({
+        name: 'Vishnu Yantra',
+        centre: [polygonFigure('p1', 6, { step: 2 })],
+        bands: [circleBand('c0'), lotusBand('l8', 8, { height: 0.24 }), circleBand('c1'), lotusBand('l12', 12, { height: 0.2 }), circleBand('c2', { count: 2, spacing: 0.035 }), bhupuraBand('bhu')],
+        text: { visible: true, font: 'tiro', color: null, sets: [], custom: [textAt('ॐ', 16, 0, -0.08)] },
+        style: { ...PAPERS.gold },
+      }),
+  },
+  {
+    id: 'lakshmi',
+    category: 'forms',
+    name: 'Lakshmi: Shrim in the Star',
+    nameHi: 'लक्ष्मी यन्त्र',
+    blurb: 'A six-pointed star with the syllable Shrim in a circle at its heart, eight and sixteen petals, on gold. A common form; lineages differ.',
+    blurbHi: 'षट्कोण, मध्य के वृत्त में श्रीं, अष्टदल और षोडशदल, स्वर्ण वर्ण। प्रचलित रूप; परम्पराओं में भेद है।',
+    make: () =>
+      createDesign({
+        name: 'Lakshmi Yantra',
+        centre: [polygonFigure('p1', 6, { step: 2 }), circleFigure('ci', 0.3)],
+        bindu: noBindu,
+        bands: standardBands(),
+        text: { visible: true, font: 'tiro', color: null, sets: [], custom: [textAt('श्रीं', 16)] },
+        style: { ...PAPERS.gold },
+      }),
+  },
+  {
+    id: 'saraswati',
+    category: 'forms',
+    name: 'Saraswati: Aim in the Star',
+    nameHi: 'सरस्वती यन्त्र',
+    blurb: 'A six-pointed star with the syllable Aim at its heart and eight rounded petals, on white. A common form; lineages differ.',
+    blurbHi: 'षट्कोण, मध्य में ऐं, गोल अष्टदल, श्वेत वर्ण। प्रचलित रूप; परम्पराओं में भेद है।',
+    make: () =>
+      createDesign({
+        name: 'Saraswati Yantra',
+        centre: [polygonFigure('p1', 6, { step: 2 })],
+        bindu: noBindu,
+        bands: [circleBand('c0'), lotusBand('l8', 8, { height: 0.28, shape: 'round', fullness: 0.8, tip: 0.3 }), circleBand('c1', { count: 2, spacing: 0.035 }), bhupuraBand('bhu')],
+        text: { visible: true, font: 'tiro', color: null, sets: [], custom: [textAt('ऐं', 18)] },
+        style: { ...PAPERS.white },
+      }),
+  },
+  {
+    id: 'suryaDeva',
+    category: 'forms',
+    name: 'Surya: Twelve Petals',
+    nameHi: 'सूर्य यन्त्र (द्वादशदल)',
+    blurb: 'A six-pointed star in a circle with twelve petals for the twelve Adityas. A common form; lineages differ.',
+    blurbHi: 'वृत्त में षट्कोण, बारह आदित्यों के लिए द्वादशदल। प्रचलित रूप; परम्पराओं में भेद है।',
+    make: () =>
+      createDesign({
+        name: 'Surya Yantra (lotus)',
+        centre: [polygonFigure('p1', 6, { step: 2 }), circleFigure('ci', 0.28)],
+        bindu: noBindu,
+        bands: [circleBand('c0'), lotusBand('l12', 12, { height: 0.26 }), circleBand('c1'), bhupuraBand('bhu')],
+        text: { visible: true, font: 'tiro', color: null, sets: [], custom: [textAt('ह्रीं', 14)] },
+        style: { ...PAPERS.copper },
+      }),
+  },
+  {
+    id: 'sudarshana',
+    category: 'forms',
+    name: 'Sudarshana: Wheel of Flames',
+    nameHi: 'सुदर्शन चक्र यन्त्र',
+    blurb: 'A six-pointed star in two circles ringed by sixteen flames, without a square. A common form; lineages differ.',
+    blurbHi: 'दो वृत्तों में षट्कोण, चारों ओर सोलह ज्वालाएँ, भूपुर रहित। प्रचलित रूप; परम्पराओं में भेद है।',
+    make: () =>
+      createDesign({
+        name: 'Sudarshana Yantra',
+        centre: [polygonFigure('p1', 6, { step: 2 }), circleFigure('ci', 0.26)],
+        bindu: noBindu,
+        bands: [circleBand('c0', { count: 2, spacing: 0.04 }), lotusBand('fl', 16, { height: 0.3, shape: 'flame' }), circleBand('c1')],
+        text: { visible: true, font: 'tiro', color: null, sets: [], custom: [textAt('ॐ', 16)] },
+        style: { ...PAPERS.gold },
+      }),
+  },
+  {
+    id: 'sriOpen',
+    category: 'triangles',
+    name: 'Nine Separate Triangles',
+    nameHi: 'नौ स्वतन्त्र त्रिकोण',
+    blurb: 'The Sri Yantra taken apart into its nine triangles. Change any one of them by itself; rings mark every place that no longer meets exactly.',
+    blurbHi: 'श्री यन्त्र के नौ त्रिकोण अलग-अलग। किसी एक को स्वयं बदलें; जहाँ रेखाएँ ठीक नहीं मिलतीं वहाँ घेरा दिखता है।',
+    make: () => {
+      const base = createDesign({ name: 'Nine Triangles', geometry: { ...GEOMETRIES.optimal } });
+      const parts = sriAsTriangles(base);
+      return parts
+        ? { ...base, centre: parts.triangles, bindu: { ...base.bindu, ...parts.bindu }, guides: { ...base.guides, checks: true } }
+        : base;
+    },
+  },
+  {
+    id: 'greatPair',
+    category: 'triangles',
+    name: 'The Two Great Triangles',
+    nameHi: 'दो महा त्रिकोण',
+    blurb: 'The first step of every Sri Yantra: one upward and one downward isosceles triangle inscribed in the circle. Neither is equilateral.',
+    blurbHi: 'प्रत्येक श्री यन्त्र का पहला चरण: वृत्त में अन्तर्लिखित एक ऊर्ध्वमुख और एक अधोमुख समद्विबाहु त्रिकोण। कोई भी समबाहु नहीं।',
+    make: () => {
+      // a chord at height h (fraction of the diameter from the bottom) of the unit circle
+      const chord = (h: number) => 2 * Math.sqrt(1 - (2 * h - 1) ** 2);
+      const up = 0.382, down = 0.656;
+      return createDesign({
+        name: 'Great Triangles',
+        centre: [
+          triangleFigure('up', { label: 'Shani · शनि', base: chord(up), height: 2 * (1 - up), pivot: 'base', y: 1 - 2 * up }),
+          triangleFigure('down', { label: 'Kuja · कुज', base: chord(down), height: 2 * down, pivot: 'base', y: 1 - 2 * down, rotationDeg: 180 }),
+        ],
+        bindu: { visible: true, radius: 0.014, style: 'dot', x: 0, y: 0 },
+        bands: simpleBands(),
+        guides: { marma: false, sandhi: false, axes: true, checks: true },
+      });
+    },
+  },
+  {
+    id: 'damaru',
+    category: 'triangles',
+    name: 'Damaru: Tip to Tip',
+    nameHi: 'डमरू',
+    blurb: 'Two isosceles triangles meeting at their tips, like Shiva’s drum. Shows triangles placed away from the centre.',
+    blurbHi: 'शिव के डमरू जैसे, शीर्ष से शीर्ष मिले दो समद्विबाहु त्रिकोण। केन्द्र से हटाकर रखे त्रिकोणों का उदाहरण।',
+    make: () =>
+      createDesign({
+        name: 'Damaru Yantra',
+        centre: [
+          triangleFigure('top', { ...shapeFromApexAngle(1.1, 72), pivot: 'apex', rotationDeg: 180 }),
+          triangleFigure('bottom', { ...shapeFromApexAngle(1.1, 72), pivot: 'apex' }),
+        ],
+        bands: simpleBands(),
+      }),
+  },
+  {
+    id: 'goldenStar',
+    category: 'triangles',
+    name: 'Five Golden Triangles',
+    nameHi: 'पाँच स्वर्ण त्रिकोण',
+    blurb: 'Five 36°–72°–72° triangles round a pentagon: their sides and bases stand in the golden ratio, and together they make the five-pointed star.',
+    blurbHi: 'पञ्चभुज के चारों ओर ३६°–७२°–७२° के पाँच त्रिकोण: भुजा और आधार स्वर्ण अनुपात में, मिलकर पञ्चकोण तारा।',
+    make: () => {
+      // pentagon with circumradius r: side = 2 r sin 36°, apothem = r cos 36°
+      const r = 2 / (3 + Math.sqrt(5)); // 1/φ²: the tips then touch the circle exactly
+      const side = 2 * r * Math.sin(Math.PI / 5);
+      return createDesign({
+        name: 'Golden Triangles',
+        centre: [
+          polygonFigure('pent', 5, { radius: r, rotationDeg: 36 }),
+          triangleFigure('ray', { ...shapeFromApexAngle(side, 36), pivot: 'base', y: 0, orbit: { count: 5, radius: r * Math.cos(Math.PI / 5), phaseDeg: 0 } }),
+        ],
+        bands: simpleBands(),
+        style: { ...PAPERS.gold },
+      });
+    },
+  },
+  {
+    id: 'trikonaSet',
+    category: 'triangles',
+    name: 'Kinds of Triangle',
+    nameHi: 'त्रिकोण के प्रकार',
+    blurb: 'Equilateral, isosceles, right-angled and uneven triangles side by side, each set out by exact angles. A sheet to study and to copy from.',
+    blurbHi: 'समबाहु, समद्विबाहु, समकोण और विषमबाहु त्रिकोण साथ-साथ, प्रत्येक शुद्ध कोणों से बना। अध्ययन और अनुकरण के लिए।',
+    make: () =>
+      createDesign({
+        name: 'Kinds of Triangle',
+        sizeMm: 200,
+        centre: [
+          polygonFigure('frame', 4, { rotationDeg: 45, radius: 1.3 }),
+          triangleFigure('eq', { base: 0.7, height: (0.7 * Math.sqrt(3)) / 2, pivot: 'base', x: -0.45, y: -0.1 }),
+          triangleFigure('iso', { ...shapeFromApexAngle(0.5, 36), pivot: 'base', x: 0.45, y: -0.1 }),
+          triangleFigure('right', { base: 0.7, height: 0.525, skew: -1, pivot: 'base', x: -0.45, y: 0.75 }),
+          triangleFigure('scalene', { base: 0.75, height: 0.45, skew: 0.45, pivot: 'base', x: 0.45, y: 0.75 }),
+        ],
+        bindu: noBindu,
+        bands: [],
+        style: { ...PAPERS.white },
+      }),
+  },
+  {
     id: 'bhairavi',
     category: 'mahavidya',
     name: 'Downward Triangle in Star',
@@ -730,6 +990,39 @@ export const PRESETS: Preset[] = [
         centre: [gridFigure('g1', 9, 9, Array.from({ length: 81 }, (_, i) => (i === 30 ? 'ब्रह्मा' : '')), { size: 1.9, textSizeMm: 8, merges: [{ row: 3, col: 3, rows: 3, cols: 3 }] })],
         bindu: noBindu,
         bands: [],
+      }),
+  },
+  {
+    id: 'manduka',
+    category: 'numbers',
+    name: 'Sixty-Four Squares',
+    nameHi: 'चौंसठ पद मण्डल',
+    blurb: 'The eight-by-eight Manduka plan used for temples, Brahma holding the four middle squares as one.',
+    blurbHi: 'मन्दिरों का आठ-गुणा-आठ मण्डूक पद विन्यास, मध्य के चार पद ब्रह्मा के।',
+    make: () =>
+      createDesign({
+        name: 'Manduka Mandala',
+        sizeMm: 300,
+        centre: [gridFigure('g1', 8, 8, Array.from({ length: 64 }, (_, i) => (i === 27 ? 'ब्रह्मा' : '')), { size: 1.9, textSizeMm: 8, merges: [{ row: 3, col: 3, rows: 2, cols: 2 }] })],
+        bindu: noBindu,
+        bands: [],
+      }),
+  },
+  {
+    id: 'shani33',
+    category: 'numbers',
+    name: 'Number Square of 33',
+    nameHi: 'तैंतीस का यन्त्र',
+    blurb: 'The Sun’s square with six added to every cell, every line adding to 33: the Shani (Saturn) yantra.',
+    blurbHi: 'सूर्य यन्त्र के प्रत्येक अंक में छह जोड़कर, प्रत्येक पंक्ति का योग ३३ — शनि यन्त्र।',
+    make: () =>
+      createDesign({
+        name: 'Shani Yantra',
+        sizeMm: 150,
+        centre: [gridFigure('g1', 3, 3, graha(6)), polygonFigure('p1', 4, { rotationDeg: 45, radius: 1, lines: 2, lineGapMm: 2 })],
+        bindu: noBindu,
+        bands: [],
+        style: { ...PAPERS.night },
       }),
   },
   {

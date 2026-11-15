@@ -23,7 +23,7 @@ function ring(group: string, n: number, r = 0.5, radius = 0.1): Anchor[] {
   });
 }
 function scene(prims: TextPrim[]): Scene {
-  return { prims, extent: 2, unitMm: 1, anchors: [], report: {} as never, ink: '#000', paper: '#fff' };
+  return { prims, extent: 2, unitMm: 1, anchors: [], lines: [], rounds: [], report: {} as never, ink: '#000', paper: '#fff' };
 }
 function tp(over: Partial<TextPrim>): TextPrim {
   return { kind: 'text', layer: 'text', id: 't', text: 'श्रीं', x: 0, y: 0, size: 0.1, angle: 0, font: 'tiro', fill: '#000', ...over };

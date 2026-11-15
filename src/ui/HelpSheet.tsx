@@ -1,4 +1,4 @@
-/** "How to use": six illustrated steps and a short note about the geometry. */
+/** "How to use": seven illustrated steps and a short note about the geometry. */
 import type { ReactNode } from 'react';
 import { useT, type TKey } from './i18n';
 import { Sheet } from './components/Sheet';
@@ -43,6 +43,12 @@ const ART: ReactNode[] = [
     <path d="M32 8v28M22 18l10-10 10 10" className="hl" />
     <path d="M22 28h-8v28h36V28h-8" />
   </g>,
+  // 7 exact triangles, checks and measuring
+  <g key="7">
+    <path d="M8 52h44L40 14Z" />
+    <path d="M18 52a10 10 0 0 0-3-7" className="hl" />
+    <circle cx="40" cy="14" r="4" className="hl" />
+  </g>,
 ];
 
 export function HelpSheet({ open, onClose }: { open: boolean; onClose(): void }) {
@@ -81,6 +87,7 @@ export function HelpSheet({ open, onClose }: { open: boolean; onClose(): void })
           <h3>{t('help.aboutTitle')}</h3>
           <p>{t('help.about1')}</p>
           <p>{t('help.about2')}</p>
+          <p>{t('help.about3')}</p>
         </section>
       </div>
     </Sheet>

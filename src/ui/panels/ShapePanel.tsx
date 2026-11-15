@@ -57,6 +57,18 @@ function AccuracyCard({ scene, flip }: { scene: PanelProps['scene']; flip: boole
             {r.centralAngleDeg.toFixed(2)}°{eq ? ` · ${t('shape.equilateral')}` : ''}
           </dd>
         </div>
+        {r.triangles.length === 9 && (
+          <>
+            <div>
+              <dt>{t('shape.greatUp')}</dt>
+              <dd>{r.triangles[6].baseAngleDeg.toFixed(3)}°</dd>
+            </div>
+            <div>
+              <dt>{t('shape.greatDown')}</dt>
+              <dd>{r.triangles[2].baseAngleDeg.toFixed(3)}°</dd>
+            </div>
+          </>
+        )}
       </dl>
       <details className="disclosure">
         <summary>{t('shape.triangleDetails')}</summary>
@@ -67,6 +79,7 @@ function AccuracyCard({ scene, flip }: { scene: PanelProps['scene']; flip: boole
               <th scope="col">{t('shape.points')}</th>
               <th scope="col">{t('shape.apex')}</th>
               <th scope="col">{t('shape.base')}</th>
+              <th scope="col" title={t('shape.kundamshaHint')}>{t('shape.kundamsha')}</th>
             </tr>
           </thead>
           <tbody>
@@ -83,11 +96,13 @@ function AccuracyCard({ scene, flip }: { scene: PanelProps['scene']; flip: boole
                   <td>{up ? `▲ ${t('shape.up')}` : `▼ ${t('shape.down')}`}</td>
                   <td>{tr.apexAngleDeg.toFixed(2)}°</td>
                   <td>{tr.baseAngleDeg.toFixed(2)}°</td>
+                  <td>{(tr.apexAngleDeg / (360 / 81)).toFixed(2)}</td>
                 </tr>
               );
             })}
           </tbody>
         </table>
+        <p className="row-hint">{t('shape.kundamshaHint')}</p>
       </details>
     </div>
   );
