@@ -1941,11 +1941,33 @@ button.card:active,
   position: relative;
   z-index: 1;
   width: min(560px, 100%);
-  padding: 8px calc(8px + var(--safe-r)) calc(8px + var(--safe-b)) calc(8px + var(--safe-l));
+  /* never taller than the screen: the list scrolls, Cancel stays put */
+  max-height: 100vh;
+  max-height: 100dvh;
+  padding: calc(8px + var(--safe-t)) calc(8px + var(--safe-r)) calc(8px + var(--safe-b)) calc(8px + var(--safe-l));
   display: flex;
   flex-direction: column;
   gap: 8px;
   animation: sheet-in 0.32s var(--ease);
+}
+
+.action-sheet .action-group {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.action-sheet .action-cancel {
+  flex: 0 0 auto;
+}
+
+@media (max-height: 560px) {
+  .action-btn {
+    min-height: 48px;
+    font-size: 17px;
+  }
 }
 
 .action-group {
