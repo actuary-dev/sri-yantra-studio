@@ -45,7 +45,8 @@ document.addEventListener('visibilitychange', () => {
 
 if (import.meta.env.PROD) {
   import('virtual:pwa-register')
-    .then(({ registerSW }) => registerSW({ immediate: true }))
+    // reload as soon as a new version is ready, so a deploy is never hidden behind a stale cache
+    .then(({ registerSW }) => registerSW({ immediate: true, onNeedRefresh: () => window.location.reload() }))
     .catch((e) => console.warn('Service worker not registered', e));
 }
 

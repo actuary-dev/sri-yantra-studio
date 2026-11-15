@@ -17,7 +17,7 @@ engraving (DXF, SVG) and large-format printing (PDF, PNG).
   every petal, or anywhere you tap — each with its own size and angle. One button hides it all.
 * **Languages:** English and हिन्दी (with Sanskrit terms for the figures).
 
-Live: https://radical-anarchist.github.io/sri-yantra-studio/
+Live: https://actuary-dev.github.io/sri-yantra-studio/
 
 ## Run it
 
